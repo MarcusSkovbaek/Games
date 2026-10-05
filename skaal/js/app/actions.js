@@ -6,6 +6,8 @@ import { withSchedule, normalizeSettings, alcoholicDrinkIds } from '../game/sett
 import { eligibleAt } from '../game/schedule.js';
 import { gameById } from '../minigames/index.js';
 import { effectToEntries } from '../game/wheels.js';
+import { TOUR_FACES, reachesFinish, tourContext } from '../game/tour.js';
+import { drinkById } from '../game/drinks.js';
 import { randomId, randomFloat } from '../core/ids.js';
 import { now } from '../core/clock.js';
 
@@ -20,7 +22,27 @@ export function logDrink(room, drinkId) {
     offer = room.append({ t: 'o', w: trigger.w, why: trigger.why, ...(trigger.n ? { n: trigger.n } : {}), src: entry.id });
     invalidateDerived();
   }
-  return { entry, offer, trigger };
+  let moment = null;
+  if (reachesFinish({ after, me: room.pid, alcoholic: !!drinkById(drinkId)?.alcoholic })) {
+    moment = startTourMoment(room, after, entry.id);
+  }
+  return { entry, offer, trigger, moment };
+}
+
+// Tour de France: the rider reached the finish — a random face decides what happens. The moment
+// and its effects go in one batch so every phone gets them together.
+function startTourMoment(room, d, drinkEntryId) {
+  const face = TOUR_FACES[Math.floor(randomFloat() * TOUR_FACES.length)];
+  const id = randomId(10);
+  const effects = face.effects(tourContext(d, room.pid)).map((e) => ({ ...e, src: id }));
+  const [moment] = room.appendMany([{ t: 'tour', id, face: face.id, n: d.mePlayer.alcoholic, src: drinkEntryId }, ...effects]);
+  invalidateDerived();
+  return moment;
+}
+
+// Host: share an image with everyone (Tour faces and leader mask), or null for the default.
+export function setSharedImage(room, name, dataUrl) {
+  room.setAsset(name, dataUrl || null);
 }
 
 export function undo(room, entryId) {

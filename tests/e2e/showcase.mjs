@@ -72,6 +72,22 @@ try {
   await tv.page.waitForSelector('.tv__board .board-row');
   await wait(1200);
   await save(tv.page, '8-storskaerm');
+  await tv.context.close();
+
+  // Tour de France: the host switches the mode on; Sara rides to 20 drinks and logs the 21st.
+  await tab(host, 'Mig');
+  await host.page.getByText('Event-indstillinger').click();
+  await host.page.locator('.switch-row', { hasText: 'Tour de France-tilstand' }).click();
+  await host.page.getByRole('button', { name: 'Gem ændringer' }).click();
+  await tab(host, 'Drik');
+  await sara.page.evaluate(() => window.__skaal.session.get().room.appendMany(Array.from({ length: 19 }, () => ({ t: 'd', k: 'beer' }))));
+  await tab(sara, 'Drik');
+  await wait(1500);
+  await save(sara.page, '9-tour-troeje');
+  await sara.page.locator('.drink-tile', { hasText: 'Øl' }).first().click();
+  await sara.page.waitForSelector('.tour.is-revealed', { timeout: 10000 });
+  await wait(2600); // let the confetti settle
+  await save(sara.page, '10-tour-ansigt');
   console.log('screenshots written to docs/screenshots/');
 } finally {
   await env.teardown();

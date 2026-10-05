@@ -18,6 +18,10 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   <img src="docs/screenshots/6-resultat.jpg" width="190" alt="Minigame-resultat" />
   <img src="docs/screenshots/7-feed.jpg" width="190" alt="Feed med reaktioner" />
 </p>
+<p>
+  <img src="docs/screenshots/9-tour-troeje.jpg" width="190" alt="Tour de France: føreren i den gule trøje" />
+  <img src="docs/screenshots/10-tour-ansigt.jpg" width="190" alt="Tour de France: et ansigt dukker op ved 21 drinks" />
+</p>
 <p><img src="docs/screenshots/8-storskaerm.jpg" width="780" alt="Storskærm" /></p>
 
 ## Funktioner
@@ -36,6 +40,9 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   saks, papir), Hvem drikker?, Sandhed eller konsekvens, Kategorier, Skål-runde, Happy Hour
   (dobbelt point) og Ny regel. De kører som automatiske *breakers* (fx hver 15. minut) på alles
   telefoner samtidig, eller startes manuelt fra fanen "Spil".
+- **Tour de France-tilstand** — føreren bærer den gule trøje (hjelm og racerbriller på sit billede),
+  og når en rytter når 21 drinks, dukker Henning Primdahl, Bobby eller Pimm op på alles telefoner —
+  hver med sin egen effekt — mens Tour-sangen spiller. Se [Tour de France](#tour-de-france).
 - **Straffe og skjolde** — slurke du får tildelt, popper op med "Skål — drukket ✓", og et skjold kan
   bruges til at slippe.
 - **Feed med reaktioner**, **storskærm** (`#/tv/<kode>`) til tv'et, **slutresultat** med podie og
@@ -52,6 +59,51 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 
 Alle andre statiske hosts virker også (Netlify, Vercel, Cloudflare Pages …). Appen kræver https,
 fordi den krypterer alt.
+
+## Tour de France
+
+Slå *Tour de France* til, når du opretter eventet, eller senere under **Mig → Event-indstillinger**.
+
+- **Den gule trøje:** Den, der fører, får en gul ring samt gul hjelm og racerbriller over sit
+  billede — overalt i appen og på storskærmen — så alle kan se, hvem der fører. Værten kan uploade
+  sin egen maske (fx en Vingegaard-maske som PNG med gennemsigtig baggrund), som så lægges over
+  førerens billede i stedet.
+- **21 etaper = 21 drinks:** Drinks-kortet viser, hvor langt man er i Touren. Når en rytter når 21
+  drinks, ruller et ansigt frem på alles telefoner (og storskærmen), og ansigtet bestemmer, hvad
+  der sker:
+
+  | Ansigt | Effekt |
+  | --- | --- |
+  | **Henning Primdahl** — *Massestart!* | Hele feltet skåler for rytteren: alle drikker 2 slurke. |
+  | **Bobby** — *Baghjul!* | De to nærmeste ryttere i stillingen skal have baghjul: 3 slurke hver. |
+  | **Pimm** — *Udbrud!* | Rytteren får 3 point i tidsbonus, og den nærmeste rival drikker 3 slurke. |
+
+  De ramte kan drikke direkte fra pop-up'en (eller bruge et skjold). Det sker én gang pr. rytter;
+  fortryder rytteren den 21. drink, forsvinder øjeblikket igen.
+- **Billeder af ansigterne:** Appen har tegnede versioner af Henning, Bobby og Pimm. Værten kan
+  uploade jeres egne billeder under *Ansigterne ved 21 drinks* — de deles krypteret med alle
+  telefoner med det samme. (Appen leverer ingen fotos af rigtige personer; brug billeder, I har lov
+  til at bruge.)
+
+### Tour-sangen
+
+“De skal have baghjul (nede i Touren)” med Drengene fra Angora er ophavsretligt beskyttet og
+følger derfor ikke med appen. I vælger selv, hvor sangen kommer fra:
+
+1. **Lydfil på denne enhed** (anbefalet): Vælg mp3-filen under *Tour-sangen* på den telefon eller
+   computer, der er koblet til højttaleren. Filen bliver på enheden og spilles der ved hvert
+   Tour-øjeblik.
+2. **Link til en lydfil** (fx `https://…/baghjul.mp3`): Spiller automatisk i baggrunden på
+   rytterens telefon og på storskærmen — eller på alle telefoner, hvis *Spil sangen på alle
+   telefoner* er slået til. Serveren skal tillade CORS, ellers afspilles filen via et almindeligt
+   lydelement (virker de fleste steder).
+3. **Spotify- eller YouTube-link:** Kan ikke spille i baggrunden, så pop-up'en får en
+   *Spil Tour-sangen*-knap, der åbner linket.
+
+Uden sang spiller appen en kort cykelklokke-fanfare. Mens sangen spiller, kan den stoppes med
+knappen med de små lydbjælker i toppen.
+Browsere spiller først lyd, når man har trykket på siden én gang — på storskærmen er der en
+*Slå lyd til*-knap.
 
 ## Sådan virker synkroniseringen
 
@@ -104,6 +156,13 @@ tegnet illustration i stedet for emoji, så tilføj en funktion i
 
 Spillet kommer automatisk med i breaker-rotationen, under "Spil" og i værtens indstillinger.
 
+### Tour de France: ansigter og effekter
+
+Navne, tekster og effekter for ansigterne står i [`skaal/js/game/tour.js`](skaal/js/game/tour.js)
+(`TOUR_FACES`). En effekt er en liste af log-indslag — `all`, `self`, `pen`, `bon` og så videre — som
+i lykkehjulene, og `tourContext()` giver rytterens nærmeste konkurrenter. Tegningerne ligger i
+[`skaal/js/ui/tourArt.js`](skaal/js/ui/tourArt.js).
+
 ### Mere indhold
 
 Spørgsmål, "Jeg har aldrig…", regler, sandheder og konsekvenser ligger som almindelige lister i
@@ -138,7 +197,7 @@ skaal/
   js/config.js                              brokere og spil-konstanter
   js/core/                                  kryptering, id'er, ur, seeded random, storage
   js/sync/                                  MQTT-klient og synkronisering (Room)
-  js/game/                                  drinks, indstillinger, point/afledt state, hjul, tidsplan
+  js/game/                                  drinks, indstillinger, point/afledt state, hjul, tidsplan, Tour
   js/minigames/                             ét modul pr. minigame + registry
   js/ui/                                    komponenter, skærme, lyd, grafik
 tests/unit, tests/e2e                       automatiske tests

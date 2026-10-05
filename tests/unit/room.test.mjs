@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Room } from '../../skaal/js/sync/room.js';
+import { Room, cleanAsset } from '../../skaal/js/sync/room.js';
 import { deriveRoom, seal, unseal } from '../../skaal/js/core/crypto.js';
 import { SYNC } from '../../skaal/js/config.js';
 import { startBroker } from '../support/broker.mjs';
@@ -116,6 +116,43 @@ test('a deleted event stays deleted: other devices do not heal player data back'
     } finally {
       fresh.stop();
     }
+  } finally {
+    host.stop();
+    guest.stop();
+    await wait(300);
+    await broker.close();
+  }
+});
+
+test('shared images: the host\'s pictures reach everyone (also late joiners), newest wins, junk is dropped', async () => {
+  const broker = await startBroker();
+  const brokers = [{ id: 'local', url: broker.url }];
+  const code = 'TQURM7KX';
+  const host = await makeRoom(code, 'hostpid03', brokers);
+  const guest = await makeRoom(code, 'guestpid3', brokers);
+  const img = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+  try {
+    await until(() => host.status.online && guest.status.online, 6000, 'online');
+    host.setMeta({ name: 'Touren', hostId: 'hostpid03', createdAt: Date.now(), startedAt: Date.now(), settings: { tour: true } });
+    host.setAsset('tour-face-bobby', img);
+    host.setAsset('tour-mask', img);
+    await until(() => guest.asset('tour-face-bobby') === img && guest.asset('tour-mask') === img, 6000, 'images reached guest');
+
+    // Back to the default picture: null wins because it is newer.
+    host.setAsset('tour-face-bobby', null);
+    await until(() => guest.state.assets['tour-face-bobby']?.v === 2, 6000, 'reset reached guest');
+    assert.equal(guest.asset('tour-face-bobby'), null);
+
+    const late = await makeRoom(code, 'latepid03', brokers);
+    try {
+      await until(() => late.asset('tour-mask') === img && late.state.assets['tour-face-bobby']?.v === 2, 6000, 'late joiner got retained images');
+    } finally {
+      late.stop();
+    }
+
+    assert.equal(cleanAsset({ v: 1, data: 'javascript:alert(1)' }).data, null, 'only image data urls');
+    assert.equal(cleanAsset({ v: 1, data: 'data:image/png;base64,' + 'A'.repeat(400_000) }).data, null, 'size limit');
+    assert.throws(() => host.setAsset('../evil', img), /Invalid asset name/);
   } finally {
     host.stop();
     guest.stop();

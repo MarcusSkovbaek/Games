@@ -2,6 +2,7 @@ import { html, useState, Button, IconButton, Icon, Chips, Switch, Stepper, cx } 
 import { DrinkArt } from '../drinkArt.js';
 import { DRINKS, POINT_STEPS } from '../../game/drinks.js';
 import { defaultSettings, normalizeSettings, withSchedule, BREAKER_OPTIONS } from '../../game/settings.js';
+import { TOUR_HINT } from '../../game/tour.js';
 import { randomCode, randomId } from '../../core/ids.js';
 import { now } from '../../core/clock.js';
 import { openEvent, rememberEvent } from '../../app/session.js';
@@ -132,6 +133,8 @@ export function Create() {
           checked=${settings.bonus}
           onChange=${(bonus) => update({ bonus })}
         />
+        <div class="divider"></div>
+        <${Switch} label="🚴 Tour de France" hint=${`${TOUR_HINT}. Billeder og sang vælges under indstillinger.`} checked=${settings.tour} onChange=${(tour) => update({ tour })} />
       </div>
 
       ${error ? html`<div class="form-error" role="alert"><${Icon} name="info" size=${18} />${error}</div>` : null}

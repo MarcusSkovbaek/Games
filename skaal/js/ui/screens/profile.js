@@ -47,7 +47,9 @@ export function PhotoPicker({ value, onChange, size = 148 }) {
   </div>`;
 }
 
-function CropSheet({ file, onCancel, onDone }) {
+// Square crop with pan/zoom. `alpha` keeps transparency (PNG/WebP), otherwise JPEG; the result
+// is shrunk until it fits in `maxChars` (it is synced to every phone).
+export function CropSheet({ file, onCancel, onDone, out = OUT, maxChars = MAX_CHARS, alpha = false, title = 'Tilpas dit billede' }) {
   const [img, setImg] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -137,22 +139,37 @@ function CropSheet({ file, onCancel, onDone }) {
     setZoomClamped(zoom * (e.deltaY < 0 ? 1.08 : 0.92));
   };
 
-  const exportPhoto = () => {
+  const render = (size) => {
     const canvas = document.createElement('canvas');
-    canvas.width = OUT;
-    canvas.height = OUT;
+    canvas.width = size;
+    canvas.height = size;
     const ctx = canvas.getContext('2d');
-    const k = OUT / view;
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, OUT, OUT);
+    const k = size / view;
+    if (!alpha) {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, size, size);
+    }
     ctx.imageSmoothingQuality = 'high';
-    ctx.translate(OUT / 2 + pos.x * k, OUT / 2 + pos.y * k);
+    ctx.translate(size / 2 + pos.x * k, size / 2 + pos.y * k);
     ctx.scale(scale * k, scale * k);
     ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+    return canvas;
+  };
+
+  const exportPhoto = () => {
     let url = '';
-    for (const q of [0.86, 0.76, 0.64, 0.5]) {
-      url = canvas.toDataURL('image/jpeg', q);
-      if (url.length <= MAX_CHARS) break;
+    for (const size of [out, Math.round(out * 0.8), Math.round(out * 0.62)]) {
+      const canvas = render(size);
+      for (const q of [0.86, 0.76, 0.64, 0.5]) {
+        url = alpha ? canvas.toDataURL('image/webp', q) : canvas.toDataURL('image/jpeg', q);
+        // Browsers without WebP encoding hand back a PNG, which has no quality setting.
+        if (url.length <= maxChars || !url.startsWith(alpha ? 'data:image/webp' : 'data:image/jpeg')) break;
+      }
+      if (url.length <= maxChars) break;
+    }
+    if (url.length > maxChars) {
+      toast('Billedet er for stort — prøv et andet', { icon: '🖼️', tone: 'bad' });
+      return;
     }
     onDone(url);
   };
@@ -160,7 +177,7 @@ function CropSheet({ file, onCancel, onDone }) {
   return html`<${Sheet}
     open=${!!file}
     onClose=${onCancel}
-    title="Tilpas dit billede"
+    title=${title}
     subtitle="Træk for at flytte · knib eller brug skyderen for at zoome"
     footer=${html`<div class="btn-row">
       <${Button} variant="secondary" onClick=${onCancel}>Annullér<//>
@@ -170,7 +187,7 @@ function CropSheet({ file, onCancel, onDone }) {
     ${error
       ? html`<div class="form-error"><${Icon} name="info" size=${18} />${error}</div>`
       : html`<div
-            class="cropper"
+            class=${cx('cropper', alpha && 'cropper--alpha')}
             ref=${measureRef}
             onPointerDown=${onPointerDown}
             onPointerMove=${onPointerMove}

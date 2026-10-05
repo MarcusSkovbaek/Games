@@ -147,7 +147,7 @@ export function MeTab({ room, d }) {
         ${d.isHost
           ? html`<button type="button" class="list-item" onClick=${() => setHostOpen(true)}>
               <span class="list-item__icon"><${Icon} name="sliders-horizontal" size=${18} /></span>
-              <span class="list-item__text"><div class="list-item__title">Event-indstillinger</div><div class="list-item__sub">Point, drinks, breakers og minigames</div></span>
+              <span class="list-item__text"><div class="list-item__title">Event-indstillinger</div><div class="list-item__sub">Point, drinks, minigames og Tour de France</div></span>
               <${Icon} name="chevron-right" size=${18} />
             </button>`
           : null}

@@ -1,5 +1,5 @@
 // Big-screen mode (#/tv/<code>): a read-only live view for a TV or laptop at the party.
-import { html, useEffect, useStore, useNow, Avatar, Icon, Ring, Spinner } from '../kit.js';
+import { html, useState, useEffect, useStore, useNow, Avatar, Icon, Ring, Spinner } from '../kit.js';
 import { session, openEvent, closeEvent, getDerived } from '../../app/session.js';
 import { isValidCode, formatCode } from '../../core/ids.js';
 import { now } from '../../core/clock.js';
@@ -10,6 +10,26 @@ import { eventLink, navigate } from '../router.js';
 import { fmtPoints, fmtDuration, fmtAgo } from '../format.js';
 import { FeedText, gameSummary } from '../feedText.js';
 import { TITLE_EMOJI } from './board.js';
+import { TourOverlay, SongButton } from './tour.js';
+import { stopTourSong } from '../tourSong.js';
+import { audioReady, audioContext } from '../feedback.js';
+import { prefs } from '../ui-store.js';
+
+// Browsers only play sound after a tap on the page; the big screen asks for one so the Tour song
+// can play there.
+function SoundUnlock() {
+  const [, setTick] = useState(0);
+  if (audioReady()) return null;
+  const unlock = () => {
+    prefs.set({ sound: true });
+    Promise.resolve(audioContext()?.resume())
+      .catch(() => {})
+      .finally(() => setTick((x) => x + 1));
+  };
+  return html`<button type="button" class="btn btn--primary btn--sm" onClick=${unlock}>
+    <${Icon} name="volume-2" size=${16} /><span class="btn__label">Slå lyd til</span>
+  </button>`;
+}
 
 export function TvRoute({ code }) {
   const room = useStore(session, (s) => (s.code === code ? s.room : null));
@@ -23,6 +43,7 @@ export function TvRoute({ code }) {
     navigator.wakeLock?.request('screen').then((l) => (lock = l)).catch(() => {});
     return () => {
       lock?.release?.().catch(() => {});
+      stopTourSong();
       closeEvent();
     };
   }, [code]);
@@ -48,9 +69,11 @@ export function TvRoute({ code }) {
         <h1 class="tv__title">${d.meta.name}</h1>
         <div class="row faint" style=${{ fontWeight: 600 }}>
           <span class="sync-dot ${room.status.online ? 'is-online' : 'is-offline'}"></span>
-          ${d.ended ? 'Afsluttet' : 'Live'} · ${d.ranking.length} deltagere · ${d.totals.alcoholic} drinks
+          ${d.ended ? 'Afsluttet' : 'Live'} · ${d.ranking.length} deltagere · ${d.totals.alcoholic} drinks${d.tour.on ? ' · 🚴 Tour de France' : ''}
         </div>
       </div>
+      <${SongButton} label />
+      ${d.tour.on ? html`<${SoundUnlock} />` : null}
       <button type="button" class="btn btn--secondary btn--sm" onClick=${() => document.documentElement.requestFullscreen?.()}>
         <${Icon} name="maximize-2" size=${16} /><span class="btn__label">Fuld skærm</span>
       </button>
@@ -129,6 +152,7 @@ export function TvRoute({ code }) {
         </div>
       </div>
     </aside>
+    <${TourOverlay} room=${room} d=${d} tv />
   </div>`;
 }
 

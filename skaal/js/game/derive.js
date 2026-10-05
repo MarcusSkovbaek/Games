@@ -6,6 +6,7 @@ import { normalizeSettings, pointsFor } from './settings.js';
 import { buildInstances, phaseOf, isPausedAt, RESULT_GRACE_MS } from './schedule.js';
 import { gameById } from '../minigames/index.js';
 import { hashString } from '../core/rng.js';
+import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
 
 // Player identity colours: a categorical palette validated for colour-blind separation and
 // contrast against the app's dark surface. Assigned in fixed slot order as players join.
@@ -72,6 +73,8 @@ export function derive(room, t) {
       titles: [],
       bestReaction: 0,
       quizRight: 0,
+      jersey: false,
+      mask: null,
     });
   }
 
@@ -85,6 +88,17 @@ export function derive(room, t) {
 
   const voided = new Set();
   for (const { pid, e } of all) if (e.t === 'x' && typeof e.r === 'string') voided.add(`${pid}:${e.r}`);
+  // A Tour moment falls away when the drink that set it off is undone (as does a second moment
+  // for the same rider), and effects always follow the moment or spin they came from.
+  const rode = new Set();
+  for (const { pid, e } of all) {
+    if (e.t !== 'tour' || voided.has(`${pid}:${e.id}`)) continue;
+    if (voided.has(`${pid}:${e.src}`) || rode.has(pid) || !faceById(e.face)) voided.add(`${pid}:${e.id}`);
+    else rode.add(pid);
+  }
+  for (const { pid, e } of all) {
+    if (EFFECT_TYPES.has(e.t) && typeof e.src === 'string' && voided.has(`${pid}:${e.src}`)) voided.add(`${pid}:${e.id}`);
+  }
   const by = {};
   const entryIndex = new Map();
   for (const item of all) {
@@ -221,8 +235,10 @@ export function derive(room, t) {
   // ------------------------------------------------------------------------- obligations
   const obligations = [];
   const whyOf = (pid, src) => {
-    const spin = entryIndex.get(`${pid}:${src}`)?.e;
-    return spin?.t === 'spin' ? { wheel: spin.w, outcome: spin.oc } : null;
+    const from = entryIndex.get(`${pid}:${src}`)?.e;
+    if (from?.t === 'spin') return { wheel: from.w, outcome: from.oc };
+    if (from?.t === 'tour') return { tour: `${pid}:${from.id}`, face: from.face };
+    return null;
   };
   const activeAt = (q, ts) => q.joinedAt <= ts && (!q.left || q.left > ts) && !isPausedAt(q.pauses, ts);
   for (const { pid, e } of list('give')) {
@@ -308,6 +324,24 @@ export function derive(room, t) {
     p.pace = p.alcoholic >= 2 && hours ? p.alcoholic / hours : 0;
   }
 
+  // ------------------------------------------------------------------------ tour de france
+  const assets = st.assets || {};
+  const tour = {
+    on: settings.tour,
+    leader: null,
+    mask: assets[TOUR_ASSETS.mask]?.data || null,
+    faces: Object.fromEntries(TOUR_FACES.map((f) => [f.id, assets[TOUR_ASSETS.face(f.id)]?.data || null])),
+    moments: list('tour').map(({ pid, e }) => ({ key: `${pid}:${e.id}`, id: e.id, pid, face: e.face, n: clampInt(e.n, 1, 999), ts: e.ts, effects: [] })),
+  };
+  if (settings.tour) {
+    const top = [...players.values()].find((p) => p.titles.includes('leader'));
+    if (top) {
+      top.jersey = true;
+      top.mask = tour.mask;
+      tour.leader = top.pid;
+    }
+  }
+
   // ---------------------------------------------------------------------------------- me
   const mePlayer = players.get(me) || null;
   const inbox = obligations
@@ -329,16 +363,22 @@ export function derive(room, t) {
   }
   for (const lc of leaderChanges) feed.push({ key: `l:${lc.pid}:${lc.ts}`, ts: lc.ts + 1, kind: 'lead', pid: lc.pid, prev: lc.prev });
   for (const m of milestones) feed.push({ key: `m:${m.pid}:${m.n}`, ts: m.ts + 2, kind: 'milestone', pid: m.pid, n: m.n });
-  const spinItems = new Map();
+  // Spins and Tour moments collect the effects they caused.
+  const parents = new Map();
   for (const { pid, e } of list('spin')) {
     const item = { key: `${pid}:${e.id}`, ts: e.ts, kind: 'spin', pid, wheel: e.w, outcome: e.oc, effects: [] };
-    spinItems.set(`${pid}:${e.id}`, item);
+    parents.set(item.key, item);
+    feed.push(item);
+  }
+  for (const m of tour.moments) {
+    const item = { key: m.key, ts: m.ts, kind: 'tour', pid: m.pid, face: m.face, n: m.n, effects: m.effects };
+    parents.set(m.key, item);
     feed.push(item);
   }
   for (const type of EFFECT_TYPES) {
     for (const { pid, e } of list(type)) {
       const effect = { type, pid, e, key: `${pid}:${e.id}` };
-      const parent = e.src && spinItems.get(`${pid}:${e.src}`);
+      const parent = e.src && parents.get(`${pid}:${e.src}`);
       if (parent) parent.effects.push(effect);
       else if (type !== 'bon' && type !== 'shd') feed.push({ key: effect.key, ts: e.ts, kind: 'effect', pid, effect });
     }
@@ -395,6 +435,7 @@ export function derive(room, t) {
     myOffers,
     feed,
     reactions,
+    tour,
     leaderChanges,
     totals,
     myEntries: (st.players[me] ? [...st.players[me].entries.values()] : []).sort((a, b) => b.ts - a.ts),

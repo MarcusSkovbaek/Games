@@ -38,6 +38,7 @@
   --red: #ff5c7a;
   --blue: #5bc8f5;
   --on-gold: #1c1305;
+  --jersey: #ffd400;
   --r-xs: 10px;
   --r-s: 14px;
   --r: 20px;
@@ -548,6 +549,44 @@ a.list-item {
   margin-left: -8px;
 }
 
+/* Tour de France: the leader wears the yellow jersey — a yellow ring plus a helmet and glasses
+   (or the host's own mask image) drawn over the picture. */
+.avatar--jersey,
+.avatar-stack > .avatar--jersey {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 max(4px, calc(var(--av) * 0.075)) var(--jersey),
+    0 6px 20px rgba(255, 212, 0, 0.3);
+}
+
+.avatar--ring.avatar--jersey {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 6px var(--jersey),
+    0 10px 30px rgba(255, 212, 0, 0.38);
+}
+
+.avatar__mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 1.5px 2px rgba(0, 0, 0, 0.4));
+}
+
+.avatar .avatar__mask--custom {
+  border-radius: 50%;
+  object-fit: cover;
+  filter: none;
+}
+
+.avatar--jersey .avatar__initials {
+  transform: translateY(16%);
+  font-size: calc(var(--av) * 0.32);
+}
+
 /* ------------------------------------------------------------------------------ forms */
 
 .field {
@@ -916,8 +955,10 @@ textarea.input {
   outline: none;
 }
 
+/* `none` rather than translateY(0): a transformed panel would trap nested sheets (such as the
+   photo cropper) inside it, because fixed elements then position against the panel. */
 .sheet.is-open .sheet__panel {
-  transform: translateY(0);
+  transform: none;
 }
 
 .sheet--tall .sheet__panel {
@@ -1434,6 +1475,10 @@ textarea.input {
   max-width: none;
   transform-origin: center;
   pointer-events: none;
+}
+
+.cropper--alpha {
+  background: repeating-conic-gradient(#2a2733 0 25%, #1c1a24 0 50%) 0 0 / 20px 20px;
 }
 
 .cropper__mask {
@@ -4233,4 +4278,511 @@ button.mg-option:active:not(:disabled) {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ------------------------------------------------------------------------- tour de france */
+
+.face-art,
+.face-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The face reveal */
+.tour {
+  background:
+    radial-gradient(90% 55% at 50% 30%, color-mix(in srgb, var(--c) 34%, transparent), transparent 70%),
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--jersey) 22%, #07060c), #07060c 72%);
+  transition: background 0.6s var(--ease);
+}
+
+.tour__body {
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.tour__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.tour__disc {
+  --fc: var(--jersey);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(62vw, 240px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(100% 100% at 30% 20%, color-mix(in srgb, var(--fc) 60%, white 10%), color-mix(in srgb, var(--fc) 35%, #0b0a10));
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--fc) 85%, white 15%),
+    0 0 0 12px color-mix(in srgb, var(--fc) 22%, transparent),
+    0 24px 70px color-mix(in srgb, var(--fc) 40%, transparent);
+}
+
+.tour__disc.is-rolling {
+  animation: face-flick 0.12s ease-out;
+}
+
+.tour__disc.is-landed {
+  animation: face-land 0.75s var(--spring) both;
+}
+
+@keyframes face-flick {
+  from {
+    transform: scale(0.94);
+    filter: blur(1.5px) brightness(1.3);
+  }
+}
+
+@keyframes face-land {
+  0% {
+    transform: scale(0.7) rotate(-8deg);
+  }
+  60% {
+    transform: scale(1.08) rotate(2deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.tour__wait {
+  font-size: 84px;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.tour__name {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.tour:not(.is-revealed) .tour__name {
+  color: var(--text-2);
+  font-size: 22px;
+}
+
+.tour__verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 16px;
+  border-radius: 26px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 22%, rgba(255, 255, 255, 0.06)), rgba(255, 255, 255, 0.03));
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  animation: intro-pop 0.6s 0.1s var(--spring) both;
+}
+
+.tour__title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: color-mix(in srgb, var(--c) 70%, white 30%);
+  text-transform: uppercase;
+}
+
+.tour__text {
+  max-width: 34ch;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text);
+  text-wrap: pretty;
+}
+
+.tour__hits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tour-hit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line-2);
+  font-size: 14.5px;
+  font-weight: 600;
+  animation: card-in 0.45s var(--spring) both;
+}
+
+.tour-hit b {
+  font-weight: 800;
+  color: #ffc2cd;
+}
+
+.tour-hit.is-good b {
+  color: var(--green);
+}
+
+.tour-hit.is-done {
+  opacity: 0.7;
+}
+
+.tour__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.tour__song {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tour__song:empty {
+  display: none;
+}
+
+/* Big screen */
+.tour--tv {
+  cursor: pointer;
+}
+
+.tour--tv .overlay__inner {
+  max-width: 1100px;
+  justify-content: center;
+  padding: 40px;
+}
+
+.tour--tv .overlay__kicker {
+  font-size: 18px;
+}
+
+.tour--tv .overlay__title {
+  font-size: 46px;
+}
+
+.tour--tv .tour__body {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 48px;
+  text-align: left;
+}
+
+.tour--tv .tour__disc {
+  width: min(36vw, 400px);
+}
+
+.tour--tv .tour__name {
+  font-size: 44px;
+}
+
+.tour--tv .tour__verdict {
+  align-items: flex-start;
+  padding: 30px;
+}
+
+.tour--tv .tour__title {
+  font-size: 64px;
+}
+
+.tour--tv .tour__text {
+  max-width: 40ch;
+  font-size: 24px;
+}
+
+.tour--tv .tour__hits {
+  justify-content: flex-start;
+}
+
+.tour--tv .tour-hit {
+  min-height: 56px;
+  font-size: 20px;
+}
+
+@media (max-width: 899px) {
+  .tour--tv .tour__body {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+}
+
+/* "Now playing" button: tap to stop the Tour song */
+.song-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--jersey) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--jersey) 45%, transparent);
+  color: var(--jersey);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+
+.eq i {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: eq 0.9s ease-in-out infinite;
+}
+
+.eq i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+
+.eq i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+
+.eq i:nth-child(4) {
+  animation-delay: -0.15s;
+}
+
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Tour card on the drinks tab */
+.tour-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border-radius: var(--r);
+  background:
+    radial-gradient(120% 160% at 100% 0%, rgba(255, 212, 0, 0.16), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+  border: 1px solid rgba(255, 212, 0, 0.28);
+  box-shadow: var(--shadow-1);
+}
+
+.tour-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tour-card__badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--jersey);
+  color: #1d1600;
+  box-shadow: 0 6px 18px rgba(255, 212, 0, 0.3);
+}
+
+.tour-card__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.tour-card__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.tour-card__sub {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.tour-card__jersey {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 48%;
+  padding-left: 4px;
+}
+
+.tour-card__jersey-text,
+.tour-card__jersey--empty {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.tour-card__jersey-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tour-card__jersey small {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jersey);
+}
+
+.tour-card__jersey--empty {
+  color: var(--text-3);
+}
+
+.tour-card__road {
+  position: relative;
+  height: 10px;
+  margin-right: 24px;
+  border-radius: 999px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0 calc(100% / 21 - 2px), transparent 0 calc(100% / 21));
+}
+
+.tour-card__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffe76a, var(--jersey));
+  box-shadow: 0 0 14px rgba(255, 212, 0, 0.45);
+  transition: width 0.6s var(--spring);
+}
+
+.tour-card__flag {
+  position: absolute;
+  right: -26px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Host settings */
+.tour-faces {
+  padding: 4px 14px;
+}
+
+.tour-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+}
+
+.tour-row + .tour-row {
+  border-top: 1px solid var(--line);
+}
+
+.tour-row--single {
+  padding: 14px;
+}
+
+.tour-row__pic {
+  --fc: var(--jersey);
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(100% 100% at 30% 20%, color-mix(in srgb, var(--fc) 60%, white 10%), color-mix(in srgb, var(--fc) 35%, #0b0a10));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fc) 70%, transparent);
+}
+
+.tour-row__pic--avatar {
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  background: none;
+  box-shadow: none;
+}
+
+.tour-row__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--jersey);
+}
+
+.tour-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tour-row__name {
+  font-weight: 700;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.tour-row__tag {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.tour-row__desc {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.tour-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.upload-btn {
+  position: relative;
+  cursor: pointer;
+}
+
+.upload-btn:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }

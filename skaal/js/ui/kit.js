@@ -92,13 +92,56 @@ export function initials(name = '') {
 
 export function Avatar({ player, size = 44, online, ring, class: className, badge }) {
   const style = { '--av': `${size}px`, '--av-color': player?.color || '#8B5CF6' };
-  return html`<span class=${cx('avatar', ring && 'avatar--ring', className)} style=${style}>
+  const jersey = !!player?.jersey;
+  return html`<span class=${cx('avatar', ring && 'avatar--ring', jersey && 'avatar--jersey', className)} style=${style} title=${jersey ? 'Gul trøje — fører Touren' : null}>
     ${player?.photo
       ? html`<img src=${player.photo} alt="" loading="lazy" decoding="async" draggable="false" />`
       : html`<span class="avatar__initials">${initials(player?.name)}</span>`}
+    ${jersey ? html`<${LeaderMask} src=${player.mask} glasses=${!!player.photo} />` : null}
     ${online ? html`<span class="avatar__dot" aria-label="Online"></span>` : null}
     ${badge ? html`<span class="avatar__badge">${badge}</span>` : null}
   </span>`;
+}
+
+// Tour de France: the leader's picture gets the host's mask image, or a yellow road helmet and
+// mirrored race glasses (helmet straps and glasses only over photos — they would hide initials).
+let maskUid = 0;
+
+function LeaderMask({ src, glasses }) {
+  const id = useMemo(() => `lm${++maskUid}`, []);
+  if (src) return html`<img class="avatar__mask avatar__mask--custom" src=${src} alt="" draggable="false" />`;
+  return html`<svg class="avatar__mask" viewBox="0 0 100 100" aria-hidden="true">
+    <defs>
+      <linearGradient id=${`${id}s`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fff27f" />
+        <stop offset="0.55" stop-color="#ffd400" />
+        <stop offset="1" stop-color="#e0a300" />
+      </linearGradient>
+      <linearGradient id=${`${id}l`} x1="0" y1="0" x2="1" y2="0.4">
+        <stop offset="0" stop-color="#6d28d9" />
+        <stop offset="0.45" stop-color="#0284c7" />
+        <stop offset="0.75" stop-color="#0d9488" />
+        <stop offset="1" stop-color="#f59e0b" />
+      </linearGradient>
+    </defs>
+    ${glasses
+      ? html`<path d="M13 45C15 60 24 73 35 81M87 45C85 60 76 73 65 81" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" opacity="0.8" />`
+      : null}
+    <path d="M6 42C4 13 26-10 50-10s46 23 44 52c-9-7-25-11-44-11S15 35 6 42z" fill=${`url(#${id}s)`} />
+    <g fill="#16140f">
+      <rect x="46.5" y="-5" width="7" height="17" rx="3.5" />
+      <rect x="33" y="-1" width="6.5" height="16" rx="3.25" transform="rotate(-24 36 7)" />
+      <rect x="60.5" y="-1" width="6.5" height="16" rx="3.25" transform="rotate(24 64 7)" />
+      <rect x="20" y="10" width="6" height="14" rx="3" transform="rotate(-46 23 17)" />
+      <rect x="74" y="10" width="6" height="14" rx="3" transform="rotate(46 77 17)" />
+    </g>
+    <path d="M16 20c5-12 14-21 26-26" fill="none" stroke="#fffbd1" stroke-width="2" stroke-linecap="round" opacity="0.75" />
+    <path d="M6 42c9-7 25-11 44-11s35 4 44 11" fill="none" stroke="#16140f" stroke-width="4.5" stroke-linecap="round" />
+    ${glasses
+      ? html`<path d="M9 47c12-6 28-7 41-3 13-4 29-3 41 3l-2.4 9.5c-8 6-22 7-32 .5L50 54l-6.6 3c-10 6.5-24 5.5-32-.5z" fill=${`url(#${id}l)`} stroke="#111" stroke-width="2.2" stroke-linejoin="round" />
+          <path d="M17 49c6-2.4 13-3.2 20-2.6" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.7" />`
+      : null}
+  </svg>`;
 }
 
 export function Button({

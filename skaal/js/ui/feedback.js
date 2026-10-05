@@ -22,6 +22,26 @@ function audio() {
   }
 }
 
+// The shared audio context (null while sound is off), for longer playback such as the Tour song.
+export function audioContext() {
+  return audio();
+}
+
+export function audioReady() {
+  return !!ctx && ctx.state === 'running';
+}
+
+const unlockHooks = new Set();
+
+// Run `fn` inside the first user gesture (or right away if that already happened), e.g. to
+// unlock an <audio> element on iOS.
+export function onAudioUnlock(fn) {
+  if (unlocked) fn();
+  else unlockHooks.add(fn);
+}
+
+let unlocked = false;
+
 // iOS only allows audio after a user gesture — unlock on the first touch.
 export function installAudioUnlock() {
   const unlock = () => {
@@ -33,6 +53,9 @@ export function installAudioUnlock() {
       s.connect(master);
       s.start(0);
     }
+    unlocked = true;
+    for (const fn of unlockHooks) fn();
+    unlockHooks.clear();
     window.removeEventListener('pointerdown', unlock);
   };
   window.addEventListener('pointerdown', unlock, { passive: true });
@@ -109,6 +132,28 @@ export const sfx = {
   },
   go() {
     tone({ freq: 1046, type: 'square', dur: 0.12, gain: 0.08 });
+  },
+  // Tour de France (when no song is set up): a bike bell, then a brass-like fanfare.
+  tour() {
+    for (const at of [0, 0.16]) {
+      tone({ freq: 2637, type: 'sine', dur: 0.32, gain: 0.16, at });
+      tone({ freq: 3520, type: 'sine', dur: 0.22, gain: 0.07, at: at + 0.004 });
+    }
+    const brass = (freq, at, dur, gain = 0.12) => {
+      tone({ freq, type: 'sawtooth', dur, gain: gain * 0.55, at, attack: 0.03 });
+      tone({ freq, type: 'triangle', dur, gain, at, attack: 0.02 });
+      tone({ freq: freq * 2, type: 'triangle', dur: dur * 0.8, gain: gain * 0.3, at, attack: 0.02 });
+    };
+    [
+      [392, 0.5, 0.16],
+      [523, 0.66, 0.16],
+      [659, 0.82, 0.16],
+      [784, 0.98, 0.42],
+      [659, 1.42, 0.14],
+      [784, 1.58, 0.9],
+    ].forEach(([f, at, dur]) => brass(f, at, dur));
+    brass(1046, 1.58, 0.9, 0.06);
+    noise({ at: 1.58, dur: 0.7, gain: 0.04, from: 4000, to: 9000 });
   },
 };
 

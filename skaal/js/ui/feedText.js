@@ -2,6 +2,7 @@
 import { html } from './kit.js';
 import { drinkById } from '../game/drinks.js';
 import { wheelById, outcomeById } from '../game/wheels.js';
+import { faceById } from '../game/tour.js';
 import { gameById } from '../minigames/index.js';
 import { fmtPoints, unitText, sips } from './format.js';
 import { RULES } from '../game/content/prompts.js';
@@ -80,6 +81,10 @@ export function FeedText({ d, item, emoji = false }) {
     }
     case 'pause':
       return item.on ? html`${who} holder pause ⏸️` : html`${who} er tilbage fra pause ▶️`;
+    case 'tour': {
+      const face = faceById(item.face);
+      return html`${emoji ? '🚴 ' : ''}${who} har kørt ${item.n} etaper → ${B(face ? `${face.name}: ${face.title}` : 'Tour de France')}`;
+    }
     default:
       return null;
   }
@@ -110,5 +115,13 @@ export function obligationEmoji(ob) {
   if (ob.kind === 'owe') return '🎁';
   if (ob.unit === 'shot') return '🥃';
   if (ob.gid) return gameById(ob.game)?.emoji || '🎲';
+  if (ob.why?.tour) return '🚴';
   return '🍻';
+}
+
+// Where an obligation came from (wheel or Tour face); game penalties name the game in the title.
+export function whyText(ob) {
+  if (ob.why?.wheel) return wheelById(ob.why.wheel)?.name || null;
+  if (ob.why?.tour) return `${faceById(ob.why.face)?.name || 'Tour de France'} · Tour de France`;
+  return null;
 }

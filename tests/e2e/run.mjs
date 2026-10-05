@@ -14,6 +14,8 @@ import {
   dismissPopups,
   startGame,
   pidOf,
+  toneWav,
+  axeViolations,
 } from './helpers.mjs';
 import { startBroker } from '../support/broker.mjs';
 
@@ -297,6 +299,84 @@ const scenarios = {
     await anna.page.waitForSelector('.final-hero', { timeout: 8000 });
     await shot(anna.page, 'e2e-final');
     assert.ok(await anna.page.locator('.award').count(), 'awards are shown');
+    assertNoErrors(all.concat(tv));
+  },
+
+  async 'tour de france: yellow jersey, one face on every phone at 21 drinks, shared pictures, the song'(env) {
+    const { host, anna, bo, sara, code, all } = await party(env);
+    const song = toneWav(30);
+    const serveSong = (ph) => ph.context.route('**/audio/baghjul.mp3', (r) => r.fulfill({ status: 200, contentType: 'audio/mpeg', body: song }));
+    for (const ph of all) await serveSong(ph);
+    const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1 });
+    await serveSong(tv);
+    await tv.page.goto(env.appUrl(`#/tv/${code}`));
+    await tv.page.waitForSelector('.tv__board');
+
+    // The host switches the mode on, sets the song link and uploads a picture of Bobby.
+    await tab(host, 'Mig');
+    await host.page.getByText('Event-indstillinger').click();
+    await host.page.locator('.switch-row', { hasText: 'Tour de France-tilstand' }).click();
+    await host.page.fill('input[placeholder^="Link til mp3"]', 'audio/baghjul.mp3');
+    const bobbyPic = await photoOf(env.browser, '🚴', '#60a5fa,#1e3a8a');
+    await host.page.locator('.tour-row', { hasText: 'Bobby' }).locator('input[type=file]').setInputFiles({ name: 'bobby.jpg', mimeType: 'image/jpeg', buffer: bobbyPic });
+    await host.page.getByRole('button', { name: 'Brug billede' }).click();
+    await host.page.getByRole('button', { name: 'Gem ændringer' }).click();
+    await tab(host, 'Drik');
+    await sara.page.waitForFunction(() => window.__skaal.derived()?.tour.faces.bobby?.startsWith('data:image/jpeg'), null, { timeout: 8000 });
+    assert.equal(await derived(sara, (d) => d.tour.faces.henning), null, 'the other faces keep their drawings');
+    await tv.page.getByRole('button', { name: 'Slå lyd til' }).click();
+    await tv.page.waitForSelector('text=Slå lyd til', { state: 'detached', timeout: 3000 });
+
+    // The leader wears the yellow jersey on every phone.
+    await logDrink(anna, 'Øl', 2);
+    await wait(800);
+    const annaPid = await pidOf(anna);
+    for (const ph of [host, bo, sara]) assert.equal(await derived(ph, (d) => d.tour.leader), annaPid, `${ph.name} sees Anna in yellow`);
+    await sara.page.waitForSelector('.tour-card .avatar--jersey');
+    await tab(sara, 'Stilling');
+    assert.equal(await sara.page.locator('.board-row .avatar--jersey').count(), 1, 'one yellow jersey on the board');
+    await tab(sara, 'Drik');
+    const axeSource = readFileSync(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8');
+    assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'drinks tab with the Tour card is accessible');
+
+    // Bo rides to 20 drinks; the 21st, logged in the app, brings out a face on every screen.
+    await bo.page.evaluate(() => window.__skaal.session.get().room.appendMany(Array.from({ length: 20 }, () => ({ t: 'd', k: 'beer' }))));
+    await wait(600);
+    await logDrink(bo, 'Øl', 1);
+    const screens = [bo, host, anna, sara, tv];
+    for (const ph of screens) await ph.page.waitForSelector('.tour.is-revealed', { timeout: 10000 });
+    const faces = await Promise.all([bo, host, anna, sara].map((ph) => derived(ph, (d) => d.tour.moments.map((m) => `${m.face}:${m.n}`).join())));
+    assert.equal(new Set(faces).size, 1, 'the same face on every phone');
+    const face = faces[0].split(':')[0];
+    assert.ok(['henning', 'bobby', 'pimm'].includes(face));
+    const names = await Promise.all(screens.map((ph) => ph.page.locator('.tour__name').textContent()));
+    assert.equal(new Set(names).size, 1, 'every screen names the same face');
+    if (face === 'bobby') assert.equal(await sara.page.locator('.tour__disc img.face-photo').count(), 1, 'the uploaded picture is used');
+    const expected = { henning: 4, bobby: 2, pimm: 1 }[face];
+    assert.equal(await derived(host, (d) => d.obligations.filter((ob) => ob.why?.tour).length), expected, `${face}: who has to drink`);
+    assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'the Tour overlay is accessible');
+    await shot(bo.page, 'e2e-tour-rider');
+    await shot(tv.page, 'e2e-tour-tv');
+
+    // The rider's phone and the big screen play the song; the other phones a short fanfare.
+    assert.equal(await bo.page.evaluate(() => window.__skaal.song.get().source), 'url');
+    assert.equal(await tv.page.evaluate(() => window.__skaal.song.get().source), 'url');
+    assert.equal(await sara.page.evaluate(() => window.__skaal.song.get().last?.source), 'fanfare');
+
+    // Those hit drink straight from the overlay.
+    for (const ph of [bo, host, anna, sara]) {
+      await ph.page.locator('.tour__actions .btn').first().click();
+      await ph.page.waitForSelector('.tour', { state: 'detached', timeout: 3000 });
+    }
+    await wait(1200);
+    assert.equal(await derived(host, (d) => d.obligations.filter((ob) => ob.why?.tour && !ob.acked).length), 0, 'all sips drunk');
+    assert.equal(await sara.page.locator('.inbox-modal').count(), 0, 'no second popup for the same sips');
+
+    // One moment per rider; the song can be stopped from the top bar.
+    await logDrink(bo, 'Shot', 1);
+    assert.equal(await derived(sara, (d) => d.tour.moments.length), 1);
+    await bo.page.getByRole('button', { name: 'Stop Tour-sangen' }).click();
+    assert.equal(await bo.page.evaluate(() => window.__skaal.song.get().playing), false);
     assertNoErrors(all.concat(tv));
   },
 

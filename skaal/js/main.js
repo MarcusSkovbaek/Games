@@ -6,6 +6,7 @@ import { installAudioUnlock } from './ui/feedback.js';
 import { isDevMode } from './config.js';
 import { setClockOffset, getClockOffset, now } from './core/clock.js';
 import { session, getDerived, invalidateDerived } from './app/session.js';
+import { song } from './ui/tourSong.js';
 
 const root = document.getElementById('app');
 
@@ -41,6 +42,7 @@ if (!hasWebCrypto()) {
       now,
       session,
       derived: () => (session.get().room ? getDerived(session.get().room) : null),
+      song,
     };
   }
 }

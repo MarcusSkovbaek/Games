@@ -5,6 +5,7 @@
 //   <root>/<roomId>/p/<pid>/i    player profile (name, photo)      — last-writer-wins on `v`
 //   <root>/<roomId>/p/<pid>/l    player log: a grow-only set of entries, merged by id (CRDT)
 //   <root>/<roomId>/p/<pid>/o    presence heartbeat (+ last will when the connection drops)
+//   <root>/<roomId>/a/<name>     shared images set by the host (Tour faces, mask) — LWW on `v`
 //
 // Every player only appends to their own log, so concurrent writes never conflict and every
 // device converges on the same state regardless of message order. Any device can "heal" a broker
@@ -65,6 +66,16 @@ function cleanMeta(m) {
 
 const newer = (a, b) => (a.v || 0) > (b.v || 0) || ((a.v || 0) === (b.v || 0) && (a.u || 0) > (b.u || 0));
 
+export const ASSET_NAME = /^[a-z0-9-]{1,32}$/;
+const MAX_ASSET_CHARS = 300_000;
+
+// An asset is an image (data URL) or null, meaning "use the built-in default".
+export function cleanAsset(a) {
+  if (!a || typeof a !== 'object') return null;
+  const ok = typeof a.data === 'string' && a.data.startsWith('data:image/') && a.data.length < MAX_ASSET_CHARS;
+  return { v: Number(a.v) || 0, u: Number(a.u) || 0, data: ok ? a.data : null };
+}
+
 export class Room extends Emitter {
   constructor({ code, roomId, key, pid, brokers, WebSocketImpl, persist = true }) {
     super();
@@ -75,7 +86,7 @@ export class Room extends Emitter {
     this.base = `${SYNC.topicRoot}/${roomId}`;
     this.persist = persist;
     this.WebSocketImpl = WebSocketImpl;
-    this.state = { meta: null, players: {} };
+    this.state = { meta: null, players: {}, assets: {} };
     this.presence = {}; // pid -> brokerId -> { on, ts }
     this.version = 0;
     this.brokers = brokers.map((cfg) => ({ cfg, client: null, status: 'idle', seen: new Map(), settled: false }));
@@ -198,6 +209,21 @@ export class Room extends Emitter {
     return this.state.meta;
   }
 
+  // Shared image (host action): `data` is a data URL, or null to fall back to the default.
+  setAsset(name, data) {
+    if (!ASSET_NAME.test(name)) throw new Error(`Invalid asset name: ${name}`);
+    const prev = this.state.assets[name];
+    const next = cleanAsset({ v: (prev?.v || 0) + 1, u: now(), data });
+    this.state.assets[name] = next;
+    this._changed();
+    this._publishAll(`a/${name}`, next);
+    return next;
+  }
+
+  asset(name) {
+    return this.state.assets[name]?.data || null;
+  }
+
   // Wipes the event from the brokers (host action). Other devices see `deleted` and clean up.
   async destroy() {
     this.setMeta({ deleted: true });
@@ -205,6 +231,7 @@ export class Room extends Emitter {
     for (const pid of Object.keys(this.state.players)) {
       for (const kind of ['i', 'l', 'o']) this._publishRaw(this._topic(kind, pid), new Uint8Array(0));
     }
+    for (const name of Object.keys(this.state.assets)) this._publishRaw(`${this.base}/a/${name}`, new Uint8Array(0));
     storage.remove(`room:${this.roomId}`);
   }
 
@@ -296,6 +323,11 @@ export class Room extends Emitter {
     if (meta) tasks.push({ rel: 'm', own: this.isHost(), stale: () => !b.seen.get('m') || newer(meta, b.seen.get('m')), data: () => this.state.meta });
     // A deleted event must stay deleted: only the tombstone meta is kept alive.
     const players = meta?.deleted ? [] : Object.entries(this.state.players);
+    const assets = meta?.deleted ? [] : Object.entries(this.state.assets);
+    for (const [name, a] of assets) {
+      const rel = `a/${name}`;
+      tasks.push({ rel, own: this.isHost(), stale: () => !b.seen.get(rel) || newer(a, b.seen.get(rel)), data: () => this.state.assets[name] });
+    }
     for (const [pid, p] of players) {
       const own = pid === this.pid;
       if (p.profile) {
@@ -336,11 +368,24 @@ export class Room extends Emitter {
     if (!data || typeof data !== 'object') return;
     if (rel === 'm') {
       this._mergeMeta(b, data);
+    } else if (parts.length === 2 && parts[0] === 'a' && ASSET_NAME.test(parts[1])) {
+      this._mergeAsset(b, rel, parts[1], data);
     } else if (parts.length === 3 && parts[0] === 'p' && /^[a-z0-9]{4,32}$/.test(parts[1])) {
       const [, pid, kind] = parts;
       if (kind === 'i') this._mergeProfile(b, rel, pid, data);
       else if (kind === 'l') this._mergeLog(b, rel, pid, data);
       else if (kind === 'o') this._mergePresence(b, pid, data);
+    }
+  }
+
+  _mergeAsset(b, rel, name, data) {
+    const asset = cleanAsset(data);
+    if (!asset) return;
+    b.seen.set(rel, { v: asset.v, u: asset.u });
+    const cur = this.state.assets[name];
+    if (!cur || newer(asset, cur)) {
+      this.state.assets[name] = asset;
+      this._changed();
     }
   }
 
@@ -425,6 +470,10 @@ export class Room extends Emitter {
       player.profile = cleanProfile(p.profile);
       for (const e of p.entries || []) if (validEntry(e)) player.entries.set(e.id, e);
     }
+    for (const [name, a] of Object.entries(cached.assets || {})) {
+      const asset = cleanAsset(a);
+      if (asset && ASSET_NAME.test(name)) this.state.assets[name] = asset;
+    }
     this.version++;
   }
 
@@ -434,7 +483,7 @@ export class Room extends Emitter {
     for (const [pid, p] of Object.entries(this.state.players)) {
       players[pid] = { profile: p.profile, entries: [...p.entries.values()] };
     }
-    const snapshot = { meta: this.state.meta, players, savedAt: Date.now() };
+    const snapshot = { meta: this.state.meta, players, assets: this.state.assets, savedAt: Date.now() };
     if (this.state.meta?.deleted) {
       storage.remove(`room:${this.roomId}`);
       return;

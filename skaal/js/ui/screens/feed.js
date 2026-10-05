@@ -27,6 +27,8 @@ function glyphFor(item) {
       return '👋';
     case 'pause':
       return item.on ? '⏸️' : '▶️';
+    case 'tour':
+      return '🚴';
     default:
       return '✨';
   }
@@ -36,7 +38,8 @@ export function FeedRow({ room, d, item, compact }) {
   const actor = item.pid ? d.players.get(item.pid) : null;
   const glyph = glyphFor(item);
   // Bonus/shield effects are already spelled out by the wheel outcome itself.
-  const details = item.kind === 'spin' ? item.effects.filter((ef) => ef.type !== 'bon' && ef.type !== 'shd') : [];
+  const details =
+    item.kind === 'spin' ? item.effects.filter((ef) => ef.type !== 'bon' && ef.type !== 'shd') : item.kind === 'tour' ? item.effects : [];
   return html`<div class="feed-item">
     <div class="feed-item__icon">
       ${actor

@@ -85,3 +85,32 @@ export async function startGame(ph, name) {
 export async function pidOf(ph) {
   return ph.page.evaluate(() => window.__skaal.session.get().room.pid);
 }
+
+// A short tone as a WAV file, served as "the Tour song" in tests.
+export function toneWav(seconds = 30, rate = 8000) {
+  const n = rate * seconds;
+  const b = Buffer.alloc(44 + n);
+  b.write('RIFF', 0);
+  b.writeUInt32LE(36 + n, 4);
+  b.write('WAVEfmt ', 8);
+  b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20);
+  b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(rate, 24);
+  b.writeUInt32LE(rate, 28);
+  b.writeUInt16LE(1, 32);
+  b.writeUInt16LE(8, 34);
+  b.write('data', 36);
+  b.writeUInt32LE(n, 40);
+  for (let i = 0; i < n; i++) b[44 + i] = 128 + Math.round(30 * Math.sin((i / rate) * 2 * Math.PI * 440));
+  return b;
+}
+
+export async function axeViolations(page, axeSource) {
+  await page.addScriptTag({ content: axeSource });
+  return page.evaluate(async () =>
+    (await window.axe.run(document, { resultTypes: ['violations'] })).violations
+      .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+      .map((v) => `${v.id} (${v.nodes[0]?.target?.join(' ')})`),
+  );
+}

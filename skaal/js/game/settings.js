@@ -1,6 +1,7 @@
 // Event settings (stored in the event meta and editable by the host).
 import { DRINKS, drinkById, POINT_STEPS } from './drinks.js';
 import { GAMES } from '../minigames/index.js';
+import { cleanSongUrl } from './tour.js';
 
 export const BREAKER_OPTIONS = [0, 10, 15, 20, 30, 45, 60];
 
@@ -12,6 +13,12 @@ export function defaultSettings() {
     triggers: true,
     bonus: true,
     anyoneCanStart: true,
+    // Tour de France mode (see game/tour.js): yellow jersey for the leader, a face at 21 drinks.
+    tour: false,
+    // Link to the song played at a Tour moment, and whether every phone plays it (otherwise the
+    // rider's phone and big screens do).
+    tourSong: '',
+    tourSongAll: false,
   };
 }
 
@@ -38,6 +45,9 @@ export function normalizeSettings(raw) {
     triggers: bool(s.triggers, def.triggers),
     bonus: bool(s.bonus, def.bonus),
     anyoneCanStart: bool(s.anyoneCanStart, def.anyoneCanStart),
+    tour: bool(s.tour, def.tour),
+    tourSong: cleanSongUrl(s.tourSong),
+    tourSongAll: bool(s.tourSongAll, def.tourSongAll),
   };
 }
 

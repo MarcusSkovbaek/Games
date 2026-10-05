@@ -7,9 +7,10 @@ import { logDrink, undo, acknowledge, setPaused } from '../../app/actions.js';
 import { fmtPoints, fmtDecimal, fmtDuration } from '../format.js';
 import { sfx, haptic, confetti } from '../feedback.js';
 import { toast } from '../ui-store.js';
-import { obligationTitle, obligationEmoji } from '../feedText.js';
+import { obligationTitle, obligationEmoji, whyText } from '../feedText.js';
 import { eventUi } from './event.js';
 import { FeedRow } from './feed.js';
+import { TourCard } from './tour.js';
 
 export function HomeTab({ room, d }) {
   const me = d.mePlayer;
@@ -18,6 +19,7 @@ export function HomeTab({ room, d }) {
     <h1 class="sr-only">Drik — ${d.meta.name}</h1>
     ${d.ended ? html`<div class="offline-note"><${Icon} name="flag" size=${16} />Eventet er afsluttet — drinks kan ikke længere registreres.</div>` : null}
     <${Hero} d=${d} me=${me} />
+    <${TourCard} d=${d} />
     <${ActionItems} room=${room} d=${d} />
     <${Boosts} d=${d} />
     <section class="section">
@@ -96,7 +98,7 @@ export function InboxCard({ room, d, ob, shields }) {
   const owe = ob.kind === 'owe';
   const canShield = !owe && !ob.self && shields > 0;
   // Game penalties already name the game in the title.
-  const why = ob.why ? wheelById(ob.why.wheel)?.name : null;
+  const why = whyText(ob);
   const ack = (how) => {
     acknowledge(room, ob.key, how);
     if (how === 'shield') {
@@ -186,7 +188,7 @@ function DrinkGrid({ room, d, me }) {
     const y = ev.clientY || rect.top + rect.height / 2;
     const mult = d.modifiers.filter((m) => m.k === drink.id).reduce((a, m) => a * m.mult, 1);
     const pts = pointsFor(d.settings, drink.id) * mult;
-    const { entry, offer } = logDrink(room, drink.id);
+    const { entry, offer, moment } = logDrink(room, drink.id);
     tile.classList.remove('is-pop');
     void tile.offsetWidth;
     tile.classList.add('is-pop');
@@ -204,7 +206,8 @@ function DrinkGrid({ room, d, me }) {
         },
       },
     });
-    if (offer) {
+    // A Tour moment takes the stage; the spin waits on the drinks tab.
+    if (offer && !moment) {
       setTimeout(() => {
         sfx.fanfare();
         haptic([30, 50, 30]);
