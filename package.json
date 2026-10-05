@@ -1,0 +1,19 @@
+{
+  "name": "games",
+  "private": true,
+  "type": "module",
+  "description": "SK\u00c5L \u2014 live drinking scoreboard with minigames (static web app).",
+  "scripts": {
+    "dev": "node tests/support/dev-server.mjs",
+    "test": "node --test \"tests/unit/*.test.mjs\"",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "screenshots": "node tests/e2e/showcase.mjs"
+  },
+  "devDependencies": {
+    "aedes": "^0.51.3",
+    "axe-core": "^4.13.0",
+    "mqtt-packet": "^9.0.0",
+    "playwright": "1.56.1",
+    "ws": "^8.18.0"
+  }
+}

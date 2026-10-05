@@ -1,0 +1,107 @@
+// The event this device currently has open, plus the list of recently used events.
+import { createStore } from '../ui/kit.js';
+import { deriveRoom } from '../core/crypto.js';
+import { Room } from '../sync/room.js';
+import { resolveBrokers } from '../config.js';
+import * as storage from '../core/storage.js';
+import { randomId } from '../core/ids.js';
+import { now } from '../core/clock.js';
+import { derive } from '../game/derive.js';
+
+export const session = createStore({ code: null, room: null, status: 'idle', version: 0, sync: null });
+
+// ------------------------------------------------------------------------- recent events
+
+export function recentEvents() {
+  const list = storage.load('events', []);
+  return Array.isArray(list) ? list.filter((e) => e && typeof e.code === 'string') : [];
+}
+
+export function rememberEvent(code, patch) {
+  const list = recentEvents();
+  const i = list.findIndex((e) => e.code === code);
+  const next = { ...(i >= 0 ? list[i] : { code }), ...patch, lastOpened: Date.now() };
+  if (i >= 0) list.splice(i, 1);
+  list.unshift(next);
+  storage.save('events', list.slice(0, 12));
+  return next;
+}
+
+export function forgetEvent(code) {
+  storage.save(
+    'events',
+    recentEvents().filter((e) => e.code !== code),
+  );
+}
+
+export function pidFor(code) {
+  return recentEvents().find((e) => e.code === code)?.pid || null;
+}
+
+// ------------------------------------------------------------------------------- session
+
+let current = null;
+let opening = null;
+
+export async function openEvent(code) {
+  if (current?.code === code) return current.room;
+  if (opening?.code === code) return opening.promise;
+  closeEvent();
+  const promise = (async () => {
+    session.set({ code, status: 'connecting', room: null });
+    const { roomId, key } = await deriveRoom(code);
+    let pid = pidFor(code);
+    if (!pid) pid = randomId(12);
+    rememberEvent(code, { pid });
+    const room = new Room({ code, roomId, key, pid, brokers: resolveBrokers() });
+    const off = [
+      room.on('change', (version) => {
+        session.set({ version });
+        const name = room.state.meta?.name;
+        if (name && recentEvents()[0]?.name !== name) rememberEvent(code, { name, host: room.isHost() });
+      }),
+      room.on('status', (sync) => session.set({ sync })),
+    ];
+    if (opening?.promise !== promise) {
+      // Another event was opened while we were deriving keys.
+      off.forEach((f) => f());
+      return null;
+    }
+    current = { code, room, off };
+    opening = null;
+    session.set({ room, status: 'ready', version: room.version, sync: room.status });
+    await room.start();
+    return room;
+  })();
+  opening = { code, promise };
+  return promise;
+}
+
+export function closeEvent() {
+  opening = null;
+  if (!current) return;
+  current.off.forEach((f) => f());
+  current.room.stop();
+  current = null;
+  session.set({ code: null, room: null, status: 'idle', sync: null });
+}
+
+export function currentRoom() {
+  return current?.room || null;
+}
+
+// ------------------------------------------------------------------------------- derived
+
+let cache = { room: null, version: -1, sec: -1, d: null };
+
+export function getDerived(room, t = now()) {
+  const sec = Math.floor(t / 1000);
+  if (cache.room === room && cache.version === room.version && cache.sec === sec) return cache.d;
+  const d = derive(room, t);
+  cache = { room, version: room.version, sec, d };
+  return d;
+}
+
+export function invalidateDerived() {
+  cache = { room: null, version: -1, sec: -1, d: null };
+}
