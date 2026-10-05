@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { derive } from '../../skaal/js/game/derive.js';
 import { detectTrigger } from '../../skaal/js/game/triggers.js';
+import { allocateSips } from '../../skaal/js/game/wheels.js';
 import { withSchedule, normalizeSettings } from '../../skaal/js/game/settings.js';
 import { GAMES } from '../../skaal/js/minigames/index.js';
 import { GAMEPLAY } from '../../skaal/js/config.js';
@@ -175,4 +176,36 @@ test('every minigame sets up and resolves without throwing', () => {
     assert.ok(Array.isArray(result.penalties) && Array.isArray(result.bonus), g.id);
     assert.ok(typeof g.Play === 'function' && typeof g.Result === 'function', g.id);
   }
+});
+
+test('handing out sips by tapping players: taps count, the rest is shared evenly', () => {
+  const alloc = (total, picks) => Object.fromEntries(allocateSips(total, new Map(picks)));
+  assert.deepEqual(alloc(4, []), {});
+  assert.deepEqual(alloc(4, [['anna', 1]]), { anna: 4 }, 'one pick takes them all');
+  assert.deepEqual(alloc(4, [['anna', 1], ['bo', 1]]), { anna: 2, bo: 2 });
+  assert.deepEqual(alloc(4, [['anna', 2], ['bo', 1]]), { anna: 3, bo: 1 }, 'a second tap gives that player more');
+  assert.deepEqual(alloc(5, [['anna', 1], ['bo', 1]]), { anna: 3, bo: 2 }, 'odd sip goes to the first picked');
+  assert.deepEqual(alloc(3, [['anna', 1], ['bo', 1], ['cara', 1]]), { anna: 1, bo: 1, cara: 1 });
+  for (const picks of [[['a', 1]], [['a', 2], ['b', 1]], [['a', 1], ['b', 1], ['c', 1], ['d', 1]]]) {
+    const sum = Object.values(alloc(5, picks)).reduce((x, y) => x + y, 0);
+    assert.equal(sum, 5, 'always adds up to the total');
+  }
+});
+
+test('a fællesskål (everyone drinks) is a toast for every phone, with who has drunk', () => {
+  const room = makeRoom({ settings: { breakerMin: 0 } });
+  const spin = room.add('aaaa', T0 + MIN, { t: 'spin', w: 'king', oc: 'all1', src: 'o1' });
+  const all = room.add('aaaa', T0 + MIN + 1, { t: 'all', n: 1, src: spin.id });
+  room.add('bbbb', T0 + 2 * MIN, { t: 'ack', r: `aaaa:${all.id}`, how: 'ok' });
+  // Tour moments show their own pop-up; their "everyone drinks" is not a separate toast.
+  const tour = room.add('cccc', T0 + 3 * MIN, { t: 'tour', face: 'henning', n: 21 });
+  room.add('cccc', T0 + 3 * MIN + 1, { t: 'all', n: 2, src: tour.id });
+  const d = derive({ ...room, pid: 'cccc' }, T0 + 4 * MIN);
+  assert.equal(d.toasts.length, 1);
+  const [toast] = d.toasts;
+  assert.deepEqual([toast.pid, toast.n, toast.why?.wheel], ['aaaa', 1, 'king']);
+  assert.deepEqual(toast.targets.sort(), ['bbbb', 'cccc']);
+  const obs = d.obligations.filter((ob) => ob.key === toast.key);
+  assert.deepEqual(obs.map((ob) => [ob.target, ob.acked]).sort(), [['bbbb', true], ['cccc', false]]);
+  assert.equal(d.inbox.filter((ob) => ob.key === toast.key).length, 1, 'still owed by this phone');
 });

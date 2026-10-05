@@ -1,7 +1,7 @@
 // Personal lucky-wheel flow: spin → reveal → (choose recipients / player / rule) → apply.
-import { html, useState, useStore, useEffect, Button, IconButton, Avatar, Stepper, cx } from '../kit.js';
+import { html, useState, useStore, useEffect, Button, IconButton, Avatar, Icon, cx } from '../kit.js';
 import { Wheel } from '../wheel.js';
-import { wheelById, activeOutcomes, outcomeNeeds } from '../../game/wheels.js';
+import { wheelById, activeOutcomes, outcomeNeeds, allocateSips } from '../../game/wheels.js';
 import { RULES } from '../../game/content/prompts.js';
 import { applySpin } from '../../app/actions.js';
 import { pickWeighted, seededRandom, shuffle } from '../../core/rng.js';
@@ -60,10 +60,16 @@ function SpinFlow({ room, d, offer, onClose }) {
   };
 
   const apply = (input) => {
-    applySpin(room, d, offer, outcome, input);
+    const { entries } = applySpin(room, d, offer, outcome, input);
     storage.remove(`spin:${offer.id}`);
     sfx.clink();
-    toast(`${outcome.emoji} ${outcome.text}`, { tone: 'good', duration: 4000 });
+    const give = entries.find((e) => e.t === 'give');
+    toast(
+      give
+        ? `🍻 Sendt! ${Object.entries(give.to).map(([pid, n]) => `${d.players.get(pid)?.name || '?'} ${n}`).join(' · ')}`
+        : `${outcome.emoji} ${outcome.text}`,
+      { tone: 'good', duration: 4000 },
+    );
     onClose();
   };
 
@@ -99,11 +105,10 @@ function SpinFlow({ room, d, offer, onClose }) {
 
 function Reveal({ d, outcome, others, offer, onApply }) {
   const need = outcomeNeeds(outcome);
-  const [dist, setDist] = useState({});
+  const [picks, setPicks] = useState(() => new Map());
   const [target, setTarget] = useState(null);
   const [rule, setRule] = useState('');
   const total = outcome.effect.n || 0;
-  const used = Object.values(dist).reduce((a, b) => a + b, 0);
   const noOne = (need === 'distribute' || need === 'choosePlayer') && !others.length;
   const suggestions = shuffle(seededRandom(offer.id), RULES.map((_, i) => i)).slice(0, 3).map((i) => RULES[i]);
 
@@ -113,41 +118,10 @@ function Reveal({ d, outcome, others, offer, onApply }) {
   if (noOne) {
     body = html`<p class="mg-note">Der er ingen andre aktive spillere lige nu — effekten springes over.</p>`;
   } else if (need === 'distribute') {
-    ready = used === total;
-    input = { distribution: dist };
-    body = html`<div class="stack stack--s">
-      <div class="row" style=${{ justifyContent: 'space-between' }}>
-        <span class="mg-label">Fordel ${sips(total)}</span>
-        <span class="distribute__left">${total - used} tilbage</span>
-      </div>
-      <div class="distribute">
-        ${others.map((pid) => {
-          const p = d.players.get(pid);
-          const n = dist[pid] || 0;
-          return html`<div class="distribute__row">
-            <${Avatar} player=${p} size=${36} />
-            <span class="distribute__name">${p.name}</span>
-            <${Stepper}
-              value=${n}
-              steps=${Array.from({ length: Math.min(total, n + total - used) + 1 }, (_, i) => i)}
-              onChange=${(v) => setDist((s) => ({ ...s, [pid]: v }))}
-            />
-          </div>`;
-        })}
-      </div>
-      <button
-        type="button"
-        class="btn btn--ghost btn--sm"
-        onClick=${() => {
-          const next = {};
-          for (let i = 0; i < total; i++) {
-            const pid = others[Math.floor(randomFloat() * others.length)];
-            next[pid] = (next[pid] || 0) + 1;
-          }
-          setDist(next);
-        }}
-      >🎲 Fordel tilfældigt</button>
-    </div>`;
+    const alloc = allocateSips(total, picks);
+    ready = alloc.size > 0;
+    input = { distribution: Object.fromEntries(alloc) };
+    body = html`<${HandOut} d=${d} total=${total} others=${others} picks=${picks} alloc=${alloc} onChange=${setPicks} />`;
   } else if (need === 'choosePlayer') {
     ready = !!target;
     input = { target };
@@ -176,7 +150,91 @@ function Reveal({ d, outcome, others, offer, onApply }) {
     </div>
     ${body}
     <${Button} size="lg" block disabled=${!ready} onClick=${() => onApply(noOne ? null : input)}>
-      ${need === 'distribute' && !noOne ? 'Del slurkene ud' : need === 'choosePlayer' && !noOne ? 'Bekræft' : need === 'ruleText' ? 'Indfør reglen' : 'Fedt! 🎉'}
+      ${need === 'distribute' && !noOne
+        ? ready
+          ? `Send ${sips(total)} afsted 🍻`
+          : 'Vælg hvem der skal drikke'
+        : need === 'choosePlayer' && !noOne
+          ? 'Bekræft'
+          : need === 'ruleText'
+            ? 'Indfør reglen'
+            : 'Fedt! 🎉'}
     <//>
+  </div>`;
+}
+
+// Hand out sips: tap the players who must drink. Each tap is one sip; sips not tapped out yet
+// are shared evenly among those picked, so ticking two players for 4 sips gives them 2 each.
+function HandOut({ d, total, others, picks, alloc, onChange }) {
+  const tapped = [...picks.values()].reduce((a, b) => a + b, 0);
+  const [full, setFull] = useState(0); // bumps to replay the "all handed out" nudge
+  const tap = (pid) => {
+    if (tapped >= total) {
+      setFull((x) => x + 1);
+      haptic([8, 40, 8]);
+      return;
+    }
+    const next = new Map(picks);
+    next.set(pid, (next.get(pid) || 0) + 1);
+    onChange(next);
+    sfx.tick();
+    haptic(8);
+  };
+  const untap = (pid) => {
+    const next = new Map(picks);
+    const n = (next.get(pid) || 0) - 1;
+    if (n > 0) next.set(pid, n);
+    else next.delete(pid);
+    onChange(next);
+  };
+  const random = () => {
+    const next = new Map();
+    for (let i = 0; i < total; i++) {
+      const pid = others[Math.floor(randomFloat() * others.length)];
+      next.set(pid, (next.get(pid) || 0) + 1);
+    }
+    onChange(next);
+    sfx.tick();
+  };
+  const summary = alloc.size
+    ? [...alloc].map(([pid, n]) => `${d.players.get(pid)?.name} ${n}`).join(' · ')
+    : `${sips(total)} at dele ud`;
+  return html`<div class="handout">
+    <div class="handout__head">
+      <span class="mg-label">Hvem skal drikke?</span>
+      <span class=${cx('handout__sum', alloc.size && 'is-set', full && 'is-nudge')} key=${full} aria-live="polite">${summary}</span>
+    </div>
+    <p class="handout__hint">
+      ${tapped >= total && full ? 'Alle slurke er delt ud — tryk − for at flytte en.' : 'Tryk på dem, der skal drikke. Tryk igen for at give en af dem flere.'}
+    </p>
+    <div class="mg-grid handout__grid">
+      ${others.map((pid) => {
+        const p = d.players.get(pid);
+        const n = alloc.get(pid) || 0;
+        const picked = picks.has(pid);
+        return html`<div class="handout__cell" key=${pid}>
+          <button
+            type="button"
+            class=${cx('mg-pick', picked && 'is-selected')}
+            aria-pressed=${picked}
+            aria-label=${picked ? `${p.name}: ${sips(n)}. Tryk for at give en slurk mere` : `Giv ${p.name} slurke`}
+            onClick=${() => tap(pid)}
+          >
+            <${Avatar} player=${p} size=${52} />
+            <span class="mg-pick__name">${p.name}</span>
+            ${picked ? html`<span class="handout__count" key=${n}>${n}</span>` : null}
+          </button>
+          ${picked
+            ? html`<button type="button" class="handout__minus" aria-label=${`Én slurk mindre til ${p.name}`} onClick=${() => untap(pid)}>
+                <${Icon} name="minus" size=${14} stroke=${3} />
+              </button>`
+            : null}
+        </div>`;
+      })}
+    </div>
+    <div class="handout__tools">
+      <button type="button" class="btn btn--ghost btn--sm" onClick=${random}>🎲 Tilfældigt</button>
+      ${picks.size ? html`<button type="button" class="btn btn--ghost btn--sm" onClick=${() => onChange(new Map())}>Nulstil</button>` : null}
+    </div>
   </div>`;
 }

@@ -16,6 +16,7 @@ import {
   pidOf,
   toneWav,
   axeViolations,
+  rigSpin,
 } from './helpers.mjs';
 import { startBroker } from '../support/broker.mjs';
 
@@ -51,11 +52,12 @@ const scenarios = {
     await host.page.waitForSelector('.wheel-wrap', { timeout: 5000 });
     await host.page.getByRole('button', { name: /SPIN HJULET/ }).click();
     await host.page.waitForSelector('.outcome', { timeout: 10000 });
-    if (await host.page.locator('.distribute').count()) await host.page.getByRole('button', { name: /Fordel tilfældigt/ }).click();
+    if (await host.page.locator('.handout').count()) await host.page.getByRole('button', { name: /Tilfældigt/ }).click();
     else if (await host.page.locator('.overlay .mg-pick').count()) await host.page.locator('.overlay .mg-pick').first().click();
     else if (await host.page.locator('.rule-suggestion').count()) await host.page.locator('.rule-suggestion').first().click();
     await host.page.locator('.overlay .btn--lg').last().click();
-    await host.page.waitForSelector('.overlay', { state: 'detached', timeout: 5000 });
+    // The wheel closes; a fællesskål ("Alle 1") would pop up next on every phone.
+    await host.page.waitForSelector('.overlay:not(.gtoast)', { state: 'detached', timeout: 5000 });
     await wait(800);
     assert.equal(await derived(anna, (d) => d.feed.filter((f) => f.kind === 'spin').length), 1, 'spin shows in everyone’s feed');
     await dismissPopups(all);
@@ -302,6 +304,69 @@ const scenarios = {
     assertNoErrors(all.concat(tv));
   },
 
+  async 'wheel rewards: tap who drinks and they get a pop-up; a fællesskål pops up on every phone'(env) {
+    const { host, anna, bo, sara, code, all } = await party(env);
+    const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1 });
+    await tv.page.goto(env.appUrl(`#/tv/${code}`));
+    await tv.page.waitForSelector('.tv__board');
+    const axeSource = readFileSync(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8');
+
+    // Mads won "Giv 4": tapping Anna, Bo and Anna again gives Anna 3 and Bo 1.
+    await rigSpin(host, 'king', 'give4');
+    const pick = (name) => host.page.locator('.handout__cell', { hasText: name }).locator('.mg-pick');
+    await pick('Anna').click();
+    assert.equal(await host.page.locator('.handout__sum').textContent(), 'Anna 4', 'one pick takes all the sips');
+    await pick('Bo').click();
+    assert.equal(await host.page.locator('.handout__sum').textContent(), 'Anna 2 · Bo 2', 'shared evenly');
+    await pick('Anna').click();
+    assert.equal(await host.page.locator('.handout__sum').textContent(), 'Anna 3 · Bo 1');
+    assert.deepEqual(await axeViolations(host.page, axeSource), [], 'hand-out screen is accessible');
+    await host.page.getByRole('button', { name: /Send 4 slurke afsted/ }).click();
+
+    // The pop-up lands on Anna's and Bo's phones — and nowhere else.
+    await anna.page.waitForSelector('.drink-pop', { timeout: 6000 });
+    await bo.page.waitForSelector('.drink-pop', { timeout: 6000 });
+    assert.match(await anna.page.locator('.drink-pop').innerText(), /Mads giver dig\s+3\s+slurke\s+Kongehjulet/);
+    assert.match(await bo.page.locator('.drink-pop').innerText(), /Mads giver dig\s+1\s+slurk\b/);
+    await shot(anna.page, 'e2e-drink-popup');
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'drink pop-up is accessible');
+    await wait(400);
+    assert.equal(await sara.page.locator('.drink-pop').count() + (await host.page.locator('.drink-pop').count()), 0);
+    await anna.page.getByRole('button', { name: 'Skål — drukket ✓' }).click();
+    await bo.page.getByRole('button', { name: 'Senere' }).click();
+    await wait(900);
+    assert.deepEqual(
+      await derived(host, (d) => d.obligations.filter((ob) => ob.from === d.me).map((ob) => [d.players.get(ob.target).name, ob.n, ob.acked]).sort()),
+      [
+        ['Anna', 3, true],
+        ['Bo', 1, false],
+      ],
+    );
+    assert.equal(await bo.page.locator('.inbox-card').count(), 1, '"Senere" keeps it on the drinks tab');
+    assert.equal(await bo.page.locator('.drink-pop').count(), 0, '… without popping up again');
+
+    // Sara raises a fællesskål: it pops up on every phone (hers too) and on the big screen.
+    await rigSpin(sara, 'king', 'all1');
+    await sara.page.getByRole('button', { name: /Fedt/ }).click();
+    for (const ph of [sara, host, anna, bo, tv]) await ph.page.waitForSelector('.gtoast', { timeout: 6000 });
+    assert.match(await host.page.locator('.gtoast .overlay__title').textContent(), /Sara udbringer en skål/);
+    assert.match(await sara.page.locator('.gtoast .overlay__title').textContent(), /Du udbringer en skål/);
+    await host.page.getByRole('button', { name: 'Skål — drukket ✓' }).click(); // enabled once the 3-2-1 is over
+    await anna.page.getByRole('button', { name: 'Skål — drukket ✓' }).click();
+    await sara.page.waitForFunction(() => document.querySelector('.gtoast__progress')?.textContent.startsWith('2 af 3'), null, { timeout: 6000 });
+    await tv.page.waitForFunction(() => document.querySelector('.gtoast__progress')?.textContent.startsWith('2 af 3'), null, { timeout: 6000 });
+    await shot(sara.page, 'e2e-faellesskaal');
+    await shot(tv.page, 'e2e-faellesskaal-tv');
+    assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'fællesskål is accessible');
+    await bo.page.locator('.gtoast').getByRole('button', { name: 'Luk' }).click();
+    await wait(600);
+    assert.equal(await bo.page.locator('.drink-pop').count(), 0, 'closing the toast does not pop the sip up again');
+    assert.equal(await bo.page.locator('.inbox-card').count(), 2, 'the sip waits on the drinks tab');
+    await sara.page.getByRole('button', { name: /Skål! 🥂/ }).click();
+    await sara.page.waitForSelector('.gtoast', { state: 'detached' });
+    assertNoErrors(all.concat(tv));
+  },
+
   async 'tour de france: yellow jersey, one face on every phone at 21 drinks, shared pictures, the song'(env) {
     const { host, anna, bo, sara, code, all } = await party(env);
     const song = toneWav(30);
@@ -370,7 +435,7 @@ const scenarios = {
     }
     await wait(1200);
     assert.equal(await derived(host, (d) => d.obligations.filter((ob) => ob.why?.tour && !ob.acked).length), 0, 'all sips drunk');
-    assert.equal(await sara.page.locator('.inbox-modal').count(), 0, 'no second popup for the same sips');
+    assert.equal(await sara.page.locator('.drink-pop').count(), 0, 'no second popup for the same sips');
 
     // One moment per rider; the song can be stopped from the top bar.
     await logDrink(bo, 'Shot', 1);

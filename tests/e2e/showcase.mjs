@@ -1,7 +1,7 @@
 // Regenerates the README screenshots in docs/screenshots/ (npm run screenshots).
 import { fileURLToPath } from 'node:url';
 import { setup } from './lib.mjs';
-import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived } from './helpers.mjs';
+import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin } from './helpers.mjs';
 
 const OUT = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -32,11 +32,13 @@ try {
   await wait(1800);
   await save(host.page, '3-lykkehjul');
   await host.page.waitForSelector('.outcome', { timeout: 10000 });
-  if (await host.page.locator('.distribute').count()) await host.page.getByRole('button', { name: /Fordel tilfældigt/ }).click();
+  if (await host.page.locator('.handout').count()) await host.page.getByRole('button', { name: /Tilfældigt/ }).click();
   else if (await host.page.locator('.overlay .mg-pick').count()) await host.page.locator('.overlay .mg-pick').first().click();
   else if (await host.page.locator('.rule-suggestion').count()) await host.page.locator('.rule-suggestion').first().click();
   await host.page.locator('.overlay .btn--lg').last().click();
   await wait(800);
+  await dismissPopups(all);
+  await wait(400);
   await dismissPopups(all);
   await anna.page.evaluate(() => window.scrollTo(0, 0));
   await wait(6500); // let toasts fade
@@ -73,6 +75,31 @@ try {
   await wait(1200);
   await save(tv.page, '8-storskaerm');
   await tv.context.close();
+
+  // Handing out sips by tapping, the pop-up it causes, and a fællesskål.
+  for (const ph of all) await tab(ph, 'Drik');
+  await dismissPopups(all);
+  await rigSpin(host, 'king', 'give4');
+  const pick = (name) => host.page.locator('.handout__cell', { hasText: name }).locator('.mg-pick');
+  await pick('Anna').click();
+  await pick('Bo').click();
+  await wait(600);
+  await save(host.page, '11-del-ud');
+  await host.page.getByRole('button', { name: /Send 4 slurke afsted/ }).click();
+  await anna.page.waitForSelector('.drink-pop');
+  await wait(1000);
+  await save(anna.page, '12-pop-up');
+  for (const ph of [anna, bo]) await ph.page.getByRole('button', { name: 'Skål — drukket ✓' }).click();
+  await wait(600);
+  await rigSpin(sara, 'lucky', 'all1');
+  await sara.page.getByRole('button', { name: /Fedt/ }).click();
+  await anna.page.waitForSelector('.gtoast');
+  for (const ph of [host, bo]) await ph.page.getByRole('button', { name: 'Skål — drukket ✓' }).click();
+  await wait(2500); // let the confetti settle
+  await save(anna.page, '13-faellesskaal');
+  await anna.page.getByRole('button', { name: 'Skål — drukket ✓' }).click();
+  await sara.page.getByRole('button', { name: /Skål! 🥂/ }).click();
+  await dismissPopups(all);
 
   // Tour de France: the host switches the mode on; Sara rides to 20 drinks and logs the 21st.
   await tab(host, 'Mig');

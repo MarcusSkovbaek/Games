@@ -301,10 +301,12 @@ let sheetDepth = 0;
 function lockScroll(on) {
   sheetDepth += on ? 1 : -1;
   document.documentElement.classList.toggle('scroll-locked', sheetDepth > 0);
+  // Toasts move to the top while a sheet is open, so they never cover its buttons.
+  document.documentElement.classList.toggle('sheet-open', sheetDepth > 0);
 }
 
 // Bottom sheet. Closes on backdrop tap, Escape or a downward swipe on the handle.
-export function Sheet({ open, onClose, title, subtitle, children, footer, size = 'auto', class: className, dismissible = true }) {
+export function Sheet({ open, onClose, title, subtitle, label, children, footer, size = 'auto', class: className, dismissible = true }) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
   const panelRef = useRef(null);
@@ -364,7 +366,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, size =
     if (dy > 90) onClose?.();
   };
 
-  return html`<div class=${cx('sheet', visible && 'is-open', `sheet--${size}`, className)} role="dialog" aria-modal="true" aria-label=${title || 'Dialog'}>
+  return html`<div class=${cx('sheet', visible && 'is-open', `sheet--${size}`, className)} role="dialog" aria-modal="true" aria-label=${label || title || 'Dialog'}>
     <div class="sheet__backdrop" onClick=${() => dismissible && onClose?.()}></div>
     <div class="sheet__panel" ref=${panelRef} tabindex="-1">
       <div class="sheet__grab" onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp} onPointerCancel=${onPointerUp}>

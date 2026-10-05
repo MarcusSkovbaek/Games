@@ -1,10 +1,15 @@
-// Pops up a card when someone hands you sips, a game penalty lands on you, or you owe a drink.
-import { html, useEffect, useStore, createStore, Sheet, Button } from '../kit.js';
+// Pops up on your phone when someone hands you sips, a game penalty lands on you, or you owe a
+// drink — one at a time, until you have drunk it (or tap "Senere").
+import { html, useEffect, useStore, createStore, Sheet, Button, Avatar } from '../kit.js';
 import * as storage from '../../core/storage.js';
 import { acknowledge } from '../../app/actions.js';
 import { sfx, haptic } from '../feedback.js';
 import { toast } from '../ui-store.js';
-import { obligationTitle, obligationEmoji, whyText } from '../feedText.js';
+import { obligationEmoji, whyText, nameOf } from '../feedText.js';
+import { gameById } from '../../minigames/index.js';
+import { amountParts } from '../format.js';
+import { GAMEPLAY } from '../../config.js';
+import { TOUR } from '../../game/tour.js';
 import { eventUi } from './event.js';
 
 const POP_WINDOW_MS = 30 * 60 * 1000;
@@ -30,8 +35,14 @@ export function InboxPopup({ room, d }) {
   useStore(seenVersion, (s) => s.v);
   const seen = seenKeys(room.roomId);
   const active = d.activeGame;
-  const overlayOpen = (active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || !!ui.spin || !!ui.tour;
-  const item = d.inbox.find((ob) => !seen.has(ob.key) && ob.ts > d.t - POP_WINDOW_MS && !(ob.gid && active?.gid === ob.gid));
+  const overlayOpen = (active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || !!ui.spin || !!ui.tour || !!ui.toast;
+  // Sips from a live fællesskål or Tour moment are shown by that pop-up; a minigame's by its overlay.
+  const claimed = (ob) =>
+    (ob.gid && active?.gid === ob.gid) ||
+    (ob.everyone && d.t - ob.ts < GAMEPLAY.toastLiveMs) ||
+    (ob.why?.tour && d.t - ob.ts < TOUR.momentMs);
+  const waiting = d.inbox.filter((ob) => !seen.has(ob.key) && ob.ts > d.t - POP_WINDOW_MS && !claimed(ob));
+  const item = waiting[0] || null;
   const open = !!item && !overlayOpen && !d.mePlayer?.paused;
 
   useEffect(() => {
@@ -53,24 +64,50 @@ export function InboxPopup({ room, d }) {
     }
   };
 
-  // Game penalties already name the game in the title.
-  const why = item ? whyText(item) : null;
-  const owe = item?.kind === 'owe';
-  const shields = d.mePlayer?.shields || 0;
-  return html`<${Sheet} open=${open} onClose=${() => item && markSeen(item.key)}>
+  return html`<${Sheet} open=${open} onClose=${() => item && markSeen(item.key)} class="sheet--alert" label="Du skal drikke">
     ${item
-      ? html`<div class="inbox-modal">
-          <div class="inbox-modal__emoji" key=${item.key}>${obligationEmoji(item)}</div>
-          <div class="inbox-modal__title">${obligationTitle(d, item)}</div>
-          ${why ? html`<div class="inbox-modal__sub">${why}</div>` : null}
-          <div class="stack stack--s" style=${{ width: '100%', marginTop: '8px' }}>
-            <${Button} size="lg" block onClick=${() => ack('ok')}>${owe ? 'Jeg har givet den ✓' : 'Skål — drukket ✓'}<//>
-            ${!owe && !item.self && shields
-              ? html`<${Button} variant="secondary" block onClick=${() => ack('shield')}>🛡️ Brug skjold (${shields})<//>`
-              : null}
-            <${Button} variant="ghost" block onClick=${() => markSeen(item.key)}>Senere</${Button}>
-          </div>
-        </div>`
+      ? html`<${DrinkCard}
+          key=${item.key}
+          d=${d}
+          ob=${item}
+          shields=${d.mePlayer?.shields || 0}
+          more=${waiting.length - 1}
+          onAck=${ack}
+          onLater=${() => markSeen(item.key)}
+        />`
       : null}
   <//>`;
+}
+
+// "Mads giver dig 2 slurke": who it is from, how much, and why.
+function DrinkCard({ d, ob, shields, more, onAck, onLater }) {
+  const owe = ob.kind === 'owe';
+  const from = ob.from && !ob.self ? d.players.get(ob.from) : null;
+  const game = ob.gid ? gameById(ob.game) : null;
+  const why = whyText(ob);
+  const [num, word] = amountParts(ob.n, ob.unit);
+  const name = (pid) => html`<strong>${nameOf(d, pid)}</strong>`;
+  let title;
+  if (owe) title = html`Du skylder ${name(ob.from)}`;
+  else if (ob.self) title = 'Du skal selv drikke';
+  else if (game) title = html`<strong>${game.name}</strong> — du skal drikke`;
+  else if (ob.everyone) title = html`${name(ob.from)} udbragte en fællesskål`;
+  else title = html`${name(ob.from)} giver dig`;
+  return html`<div class="drink-pop">
+    <div class="drink-pop__art">
+      ${from
+        ? html`<${Avatar} player=${from} size=${80} ring />
+            <span class="drink-pop__badge" aria-hidden="true">${obligationEmoji(ob)}</span>`
+        : html`<span class="drink-pop__emoji" aria-hidden="true">${obligationEmoji(ob)}</span>`}
+    </div>
+    <div class="drink-pop__title">${title}</div>
+    <div class="drink-pop__amount"><span class="drink-pop__n">${num}</span><span class="drink-pop__unit">${word}</span></div>
+    ${why ? html`<div class="drink-pop__why">${why}</div>` : null}
+    <div class="drink-pop__actions">
+      <${Button} size="lg" block onClick=${() => onAck('ok')}>${owe ? 'Jeg har givet den ✓' : 'Skål — drukket ✓'}<//>
+      ${!owe && !ob.self && shields ? html`<${Button} variant="secondary" block onClick=${() => onAck('shield')}>🛡️ Brug skjold (${shields})<//>` : null}
+      <${Button} variant="ghost" block onClick=${onLater}>Senere<//>
+    </div>
+    ${more > 0 ? html`<p class="drink-pop__more">${more} mere venter på dig</p>` : null}
+  </div>`;
 }

@@ -15,6 +15,13 @@ export function plural(n, one, many) {
 
 export const sips = (n) => plural(n, 'slurk', 'slurke');
 
+// Number and word apart, for big "2 slurke" displays.
+export function amountParts(n, unit = 'sip') {
+  if (unit === 'shot') return [fmtPoints(n), n === 1 ? 'shot' : 'shots'];
+  if (unit === 'drink') return [fmtPoints(n), n === 1 ? 'drink' : 'drinks'];
+  return [fmtPoints(n), Math.abs(n) === 1 ? 'slurk' : 'slurke'];
+}
+
 export function unitText(n, unit = 'sip') {
   if (unit === 'shot') return n === 1 ? 'et shot' : `${n} shots`;
   if (unit === 'drink') return n === 1 ? 'en drink' : `${n} drinks`;

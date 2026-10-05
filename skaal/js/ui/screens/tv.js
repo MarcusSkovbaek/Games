@@ -11,6 +11,7 @@ import { fmtPoints, fmtDuration, fmtAgo } from '../format.js';
 import { FeedText, gameSummary } from '../feedText.js';
 import { TITLE_EMOJI } from './board.js';
 import { TourOverlay, SongButton } from './tour.js';
+import { GroupToastOverlay } from './groupToast.js';
 import { stopTourSong } from '../tourSong.js';
 import { audioReady, audioContext } from '../feedback.js';
 import { prefs } from '../ui-store.js';
@@ -153,6 +154,7 @@ export function TvRoute({ code }) {
       </div>
     </aside>
     <${TourOverlay} room=${room} d=${d} tv />
+    <${GroupToastOverlay} room=${room} d=${d} tv />
   </div>`;
 }
 

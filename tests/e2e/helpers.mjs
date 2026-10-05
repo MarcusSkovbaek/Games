@@ -65,11 +65,16 @@ export async function tab(ph, label) {
   await ph.page.waitForTimeout(250);
 }
 
-// Close any "you must drink" popups so the next click lands on the page.
+// Close any "you must drink" popups (and a fællesskål) so the next click lands on the page.
 export async function dismissPopups(phones) {
   for (const ph of phones) {
+    const toastClose = ph.page.locator('.gtoast').getByRole('button', { name: 'Luk' }).first();
+    if (await toastClose.count()) {
+      await toastClose.click();
+      await ph.page.waitForTimeout(350);
+    }
     for (let i = 0; i < 6; i++) {
-      const later = ph.page.locator('.inbox-modal').getByRole('button', { name: 'Senere' });
+      const later = ph.page.locator('.drink-pop').getByRole('button', { name: 'Senere' });
       if (!(await later.count())) break;
       await later.click();
       await ph.page.waitForTimeout(350);
@@ -113,4 +118,19 @@ export async function axeViolations(page, axeSource) {
       .filter((v) => v.impact === 'serious' || v.impact === 'critical')
       .map((v) => `${v.id} (${v.nodes[0]?.target?.join(' ')})`),
   );
+}
+
+// Give a player a wheel offer whose outcome is already decided (as if they had just spun it), and
+// open it — so tests can reach a specific outcome without relying on luck.
+export async function rigSpin(ph, wheel, outcome) {
+  await ph.page.evaluate(
+    ([w, oc]) => {
+      const room = window.__skaal.session.get().room;
+      const offer = room.append({ t: 'o', w, why: 'lead' });
+      localStorage.setItem(`skaal:spin:${offer.id}`, JSON.stringify({ oc }));
+      window.__skaal.ui.set({ spin: offer.id });
+    },
+    [wheel, outcome],
+  );
+  await ph.page.waitForSelector('.outcome');
 }

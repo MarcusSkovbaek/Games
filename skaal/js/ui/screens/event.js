@@ -19,10 +19,11 @@ import { SpinOverlay } from './spin.js';
 import { InboxPopup } from './inbox.js';
 import { FinalScreen } from './final.js';
 import { TourOverlay, SongButton } from './tour.js';
+import { GroupToastOverlay } from './groupToast.js';
 import { stopTourSong } from '../tourSong.js';
 
 // UI state that should survive switching tabs.
-export const eventUi = createStore({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null });
+export const eventUi = createStore({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null });
 
 export function EventRoute({ code }) {
   const [attempt, setAttempt] = useState(0);
@@ -106,7 +107,7 @@ function EventApp({ room }) {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     // Every event starts on the drinks tab with nothing open.
-    eventUi.set({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null });
+    eventUi.set({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null });
     rememberEvent(room.code, { name: d.meta.name, host: d.isHost });
     // A fresh host gets the invitation (QR code) straight away.
     if (d.isHost && d.players.size <= 1 && !storage.load(`invited:${room.roomId}`)) {
@@ -172,6 +173,7 @@ function EventApp({ room }) {
     <${BreakerOverlay} room=${room} d=${d} />
     <${SpinOverlay} room=${room} d=${d} />
     <${TourOverlay} room=${room} d=${d} />
+    <${GroupToastOverlay} room=${room} d=${d} />
     <${InboxPopup} room=${room} d=${d} />
     <${InviteSheet} room=${room} d=${d} open=${ui.invite} onClose=${() => eventUi.set({ invite: false })} />
     <${PlayerSheet} room=${room} d=${d} pid=${ui.player} onClose=${() => eventUi.set({ player: null })} />

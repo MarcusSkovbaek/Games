@@ -1038,6 +1038,12 @@ textarea.input {
   padding: 0 14px;
 }
 
+html.sheet-open .toasts {
+  top: calc(var(--safe-top) + 14px);
+  bottom: auto;
+  flex-direction: column;
+}
+
 .toast {
   pointer-events: auto;
   display: flex;
@@ -3979,37 +3985,6 @@ button.mg-option:active:not(:disabled) {
   line-height: 1.15;
 }
 
-.distribute {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.distribute__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 8px 8px 10px;
-  border-radius: 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-}
-
-.distribute__name {
-  flex: 1;
-  min-width: 0;
-  font-weight: 650;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.distribute__left {
-  text-align: center;
-  font-weight: 700;
-  color: var(--text-2);
-}
-
 .rule-suggestions {
   display: flex;
   flex-direction: column;
@@ -4033,33 +4008,6 @@ button.mg-option:active:not(:disabled) {
 }
 
 /* Inbox modal */
-.inbox-modal {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-  padding: 6px 0 4px;
-}
-
-.inbox-modal__emoji {
-  font-size: 64px;
-  line-height: 1;
-  animation: intro-pop 0.6s var(--spring) both;
-}
-
-.inbox-modal__title {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-}
-
-.inbox-modal__sub {
-  color: var(--text-2);
-}
-
 /* Final screen */
 .final-hero {
   text-align: center;
@@ -4785,4 +4733,370 @@ button.mg-option:active:not(:disabled) {
 .upload-btn:focus-within {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ handing out sips */
+
+.handout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.handout__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.handout__sum {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--text-2);
+}
+
+.handout__sum.is-set {
+  color: var(--gold-hi);
+}
+
+.handout__sum.is-nudge {
+  animation: nudge 0.4s var(--ease);
+}
+
+@keyframes nudge {
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+.handout__hint {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.handout__cell {
+  position: relative;
+  display: flex;
+}
+
+.handout__cell .mg-pick {
+  flex: 1;
+}
+
+.handout__count {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--gold);
+  color: var(--on-gold);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 30px;
+  box-shadow: 0 4px 14px rgba(247, 192, 74, 0.4);
+  animation: count-bump 0.35s var(--spring);
+}
+
+@keyframes count-bump {
+  from {
+    transform: scale(0.6);
+  }
+}
+
+.handout__minus {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(10, 8, 16, 0.72);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+
+.handout__tools {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ "you must drink" pop-up */
+
+.sheet--alert {
+  z-index: 66;
+}
+
+.drink-pop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px;
+  text-align: center;
+}
+
+.drink-pop__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+  animation: intro-pop 0.55s var(--spring) both;
+}
+
+.drink-pop__emoji {
+  font-size: 68px;
+  line-height: 1;
+}
+
+.drink-pop__badge {
+  position: absolute;
+  right: -10px;
+  bottom: -6px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-elev-2);
+  border: 2px solid var(--line-2);
+  font-size: 20px;
+}
+
+.drink-pop__title {
+  font-size: 18px;
+  color: var(--text-2);
+}
+
+.drink-pop__title strong {
+  color: var(--text);
+  font-weight: 750;
+}
+
+.drink-pop__amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  animation: intro-pop 0.6s 0.08s var(--spring) both;
+}
+
+.drink-pop__n {
+  font-family: var(--font-display);
+  font-size: 76px;
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--gold-hi);
+  text-shadow: 0 8px 30px rgba(247, 192, 74, 0.35);
+}
+
+.drink-pop__unit {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.drink-pop__why {
+  padding: 5px 12px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.drink-pop__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.drink-pop__more {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------------------- fællesskål */
+
+.gtoast {
+  --c: var(--gold);
+  background:
+    radial-gradient(70% 45% at 50% 34%, rgba(247, 192, 74, 0.28), transparent 70%),
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--gold) 26%, #07060c), #07060c 72%);
+}
+
+.gtoast__body {
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.gtoast__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-top: 6px;
+  padding: 14px;
+}
+
+.gtoast__glow {
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 224, 143, 0.35), transparent 65%);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.gtoast__glasses {
+  position: absolute;
+  right: -8px;
+  bottom: -2px;
+  font-size: 46px;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5));
+  animation: glasses 1.2s var(--ease) infinite alternate;
+}
+
+@keyframes glasses {
+  from {
+    transform: rotate(-10deg);
+  }
+  to {
+    transform: rotate(10deg) translateY(-4px);
+  }
+}
+
+.gtoast__count {
+  font-family: var(--font-display);
+  font-size: 84px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  animation: count-pop 0.6s var(--spring) both;
+}
+
+.gtoast__count.is-go {
+  font-size: 64px;
+  color: var(--gold-hi);
+  text-shadow: 0 10px 40px rgba(247, 192, 74, 0.5);
+}
+
+.gtoast__text {
+  max-width: 30ch;
+  font-size: 17px;
+  line-height: 1.45;
+  text-wrap: balance;
+}
+
+.gtoast__crowd {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 420px;
+  margin-top: 4px;
+}
+
+.gtoast__p {
+  position: relative;
+  display: inline-grid;
+  transition: opacity 0.3s var(--ease);
+}
+
+.gtoast__p:not(.is-done) {
+  opacity: 0.55;
+}
+
+.gtoast__tick {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #05230f;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 0 0 2.5px var(--bg);
+  animation: count-bump 0.35s var(--spring);
+}
+
+.gtoast__progress {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.gtoast__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.gtoast--tv {
+  cursor: pointer;
+}
+
+.gtoast--tv .overlay__inner {
+  max-width: 1000px;
+  justify-content: center;
+}
+
+.gtoast--tv .overlay__kicker {
+  font-size: 18px;
+}
+
+.gtoast--tv .overlay__title {
+  font-size: 48px;
+}
+
+.gtoast--tv .gtoast__body {
+  flex: none;
+  gap: 20px;
+}
+
+.gtoast--tv .gtoast__count {
+  font-size: 140px;
+}
+
+.gtoast--tv .gtoast__count.is-go {
+  font-size: 110px;
+}
+
+.gtoast--tv .gtoast__text {
+  font-size: 28px;
+  max-width: 40ch;
+}
+
+.gtoast--tv .gtoast__crowd {
+  max-width: 900px;
+  gap: 16px;
+}
+
+.gtoast--tv .gtoast__progress {
+  font-size: 20px;
 }

@@ -2,7 +2,7 @@
 
 export const APP = {
   name: 'SKÅL',
-  version: '1.1.0',
+  version: '1.2.0',
   storagePrefix: 'skaal:',
 };
 
@@ -43,6 +43,8 @@ export const GAMEPLAY = {
   inboxTtlMs: 3 * 60 * 60 * 1000,
   // Unspun wheel offers expire after this long.
   offerTtlMs: 2 * 60 * 60 * 1000,
+  // A fællesskål pops up on phones that see it within this long (afterwards the sip waits in the inbox).
+  toastLiveMs: 60 * 1000,
 };
 
 // Local development / automated tests can point the app at their own broker with

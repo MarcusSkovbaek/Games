@@ -19,6 +19,11 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   <img src="docs/screenshots/7-feed.jpg" width="190" alt="Feed med reaktioner" />
 </p>
 <p>
+  <img src="docs/screenshots/11-del-ud.jpg" width="190" alt="Del slurke ud ved at trykke på dem, der skal drikke" />
+  <img src="docs/screenshots/12-pop-up.jpg" width="190" alt="Pop-up hos den, der skal drikke" />
+  <img src="docs/screenshots/13-faellesskaal.jpg" width="190" alt="Fællesskål på alles telefoner" />
+</p>
+<p>
   <img src="docs/screenshots/9-tour-troeje.jpg" width="190" alt="Tour de France: føreren i den gule trøje" />
   <img src="docs/screenshots/10-tour-ansigt.jpg" width="190" alt="Tour de France: et ansigt dukker op ved 21 drinks" />
 </p>
@@ -36,6 +41,11 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 - **Lykkehjul** — 👑 *Kongehjulet* når du tager føringen, 🔥 *Comeback-hjulet* når du er langt bagud,
   🎡 *Lykkehjulet* ved hver 5. drink. Udfald som "giv 4 slurke ud", "føreren drikker 3", "en anden
   skylder dig en drink", bonuspoint, skjolde og nye regler.
+- **Del slurke ud med et tryk** — vinder du slurke at dele ud, trykker du bare på dem, der skal
+  drikke (tryk igen for at give en af dem flere; resten fordeles ligeligt). De udvalgte får med det
+  samme en pop-up på telefonen med dit billede og antallet af slurke.
+- **Fællesskål** — når hjulet siger "alle drikker", dukker skålen op på alles telefoner (også din
+  egen) og på storskærmen med 3-2-1-nedtælling, og alle kan se, hvem der har skålet.
 - **11 minigames** — Quiz, Mest tilbøjelig til…, Hurtigste finger, Jeg har aldrig…, Duel (sten,
   saks, papir), Hvem drikker?, Sandhed eller konsekvens, Kategorier, Skål-runde, Happy Hour
   (dobbelt point) og Ny regel. De kører som automatiske *breakers* (fx hver 15. minut) på alles
@@ -43,8 +53,8 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 - **Tour de France-tilstand** — føreren bærer den gule trøje (hjelm og racerbriller på sit billede),
   og når en rytter når 21 drinks, dukker Henning Primdahl, Bobby eller Pimm op på alles telefoner —
   hver med sin egen effekt — mens Tour-sangen spiller. Se [Tour de France](#tour-de-france).
-- **Straffe og skjolde** — slurke du får tildelt, popper op med "Skål — drukket ✓", og et skjold kan
-  bruges til at slippe.
+- **Straffe og skjolde** — slurke du får tildelt, popper op med hvem de er fra og hvorfor, plus
+  "Skål — drukket ✓". Et skjold kan bruges til at slippe, og "Senere" gemmer dem på Drik-fanen.
 - **Feed med reaktioner**, **storskærm** (`#/tv/<kode>`) til tv'et, **slutresultat** med podie og
   priser, **pause-tilstand**, lyd og vibration, og installérbar som app (PWA).
 - **Ansvarlig** — vand tæller med, pause tager dig ud af minigames, og alle straffe er frivillige.

@@ -286,7 +286,7 @@ export function derive(room, t) {
   const obligationByKey = new Map();
   for (const ob of obligations) {
     const ack = acks.get(`${ob.target}|${ob.key}`);
-    ob.acked = !!ack || ob.done;
+    ob.acked = !!ack || !!ob.done;
     ob.how = ack?.how || (ob.done ? 'ok' : null);
     ob.ackedAt = ack?.ts || 0;
     obligationByKey.set(`${ob.target}|${ob.key}`, ob);
@@ -302,6 +302,16 @@ export function derive(room, t) {
     }
   }
   for (const p of players.values()) p.shields = Math.max(0, p.shieldsGained - p.shieldsUsed);
+
+  // Fællesskål: an "everyone drinks" effect pops up on every phone (Tour moments have their own).
+  const toasts = [];
+  for (const { pid, e } of list('all')) {
+    const why = whyOf(pid, e.src);
+    if (why?.tour) continue;
+    const key = `${pid}:${e.id}`;
+    const targets = obligations.filter((ob) => ob.key === key).map((ob) => ob.target);
+    if (targets.length) toasts.push({ key, pid, ts: e.ts, n: clampInt(e.n, 1, 10), why, targets });
+  }
 
   // Personal minigame stats.
   for (const inst of games) {
@@ -436,6 +446,7 @@ export function derive(room, t) {
     feed,
     reactions,
     tour,
+    toasts,
     leaderChanges,
     totals,
     myEntries: (st.players[me] ? [...st.players[me].entries.values()] : []).sort((a, b) => b.ts - a.ts),
