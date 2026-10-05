@@ -38,7 +38,7 @@ export function Landing() {
             <div class="recent">
               ${recent.map(
                 (e) => html`<button type="button" class="recent__item" onClick=${() => navigate(`/e/${e.code}`)}>
-                  <span class="recent__emoji">${e.host ? '👑' : '🍻'}</span>
+                  <span class="recent__emoji">${e.type === 'pubgolf' ? '⛳' : e.host ? '👑' : '🍻'}</span>
                   <span class="recent__text">
                     <span class="recent__name">${e.name}</span>
                     <span class="recent__meta">${formatCode(e.code)} · ${fmtAgo(e.lastOpened, Date.now())}</span>

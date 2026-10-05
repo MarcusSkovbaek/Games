@@ -17,6 +17,8 @@ import {
   toneWav,
   axeViolations,
   rigSpin,
+  createPubGolf,
+  joinPubGolf,
 } from './helpers.mjs';
 import { startBroker } from '../support/broker.mjs';
 
@@ -130,6 +132,7 @@ const scenarios = {
     await host.page.locator('.mg-reaction').dispatchEvent('pointerdown');
     for (const ph of [sara, anna, bo]) {
       await ph.page.waitForSelector('.mg-reaction.is-go', { timeout: 8000 });
+      await wait(150); // a human reaction: taps within 60 ms of green count as a false start
       await ph.page.locator('.mg-reaction').dispatchEvent('pointerdown');
     }
     await finish(31_000);
@@ -445,6 +448,214 @@ const scenarios = {
     assertNoErrors(all.concat(tv));
   },
 
+  async 'pub golf: teams, judge and self scoring, penalties, bonuses, photos, podiums, challenges, TV, new judge'(env) {
+    const axeSource = readFileSync(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8');
+    const bars = ["Heidi's Bier Bar", 'Mikkeller'];
+    const { ph: host, code } = await createPubGolf(env, { bars, team: 'Hold Blå', photo: await photoOf(env.browser, '😎', '#ff9a8b,#ff6a88') });
+    const anna = await joinPubGolf(env, code, 'Anna', { team: 'Hold Rød', photo: await photoOf(env.browser, '🦊', '#a1c4fd,#c2e9fb') });
+    const bo = await joinPubGolf(env, code, 'Bo', { team: 'Hold Blå' });
+    const sara = await joinPubGolf(env, code, 'Sara', { team: 'Hold Rød', photo: await photoOf(env.browser, '🐼', '#d4fc79,#96e6a1') });
+    const all = [host, anna, bo, sara];
+    const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1 });
+    await tv.page.goto(env.appUrl(`#/tv/${code}`));
+    await tv.page.waitForSelector('.pg-tv__hole');
+    const standings = (ph) => derived(ph, (d) => d.pg.teams.map((tm) => [tm.name, tm.score]));
+    const closeMoments = async (phones) => {
+      for (const ph of phones) {
+        for (let i = 0; i < 4; i++) {
+          const btn = ph.page.locator('.pg-moment .pg-moment__actions .btn').last();
+          if (!(await btn.count())) break;
+          await btn.click();
+          await wait(350);
+        }
+      }
+    };
+
+    // Two teams of two; the host is the judge and plays for Hold Blå.
+    assert.deepEqual(
+      await derived(sara, (d) => d.pg.teams.map((tm) => [tm.name, tm.members.map((pid) => d.players.get(pid).name).sort().join('+')]).sort()),
+      [['Hold Blå', 'Bo+Mads'], ['Hold Rød', 'Anna+Sara']],
+    );
+    assert.equal(await derived(bo, (d) => d.players.get(d.pg.judge).name), 'Mads');
+    assert.equal(await host.page.locator('.pg-judge').count(), 1, 'the judge has the scoring panel');
+    assert.equal(await anna.page.locator('.pg-judge').count(), 0, 'players do not');
+    assert.equal(await anna.page.locator('.pg-hero__bar').textContent(), bars[0]);
+
+    // Hole 1 (par 3): players note their own sips; the judge notes others and has the last word.
+    await anna.page.getByRole('button', { name: '3 slag', exact: true }).click();
+    await bo.page.getByRole('button', { name: '2 slag', exact: true }).click();
+    const judgeScore = async (judge, who, n) => {
+      await judge.page.getByRole('button', { name: new RegExp(`^(Notér slag for ${who}|${who}: \\d+ slag\\. Ret)$`) }).click();
+      await judge.page.locator('.sheet.is-open .pg-numpad .pg-stroke', { hasText: new RegExp(`^${n}$`) }).click();
+      await judge.page.waitForSelector('.sheet.is-open', { state: 'detached' });
+    };
+    await judgeScore(host, 'Sara', 4);
+    await judgeScore(host, 'Mads', 1);
+    await host.page.waitForSelector('[aria-label="Anna: 3 slag. Ret"]', { timeout: 5000 });
+    await judgeScore(host, 'Anna', 5);
+    await wait(900);
+    const hole1 = (ph) =>
+      derived(ph, (d) => Object.fromEntries([...d.pg.players.values()].map((x) => [d.players.get(x.pid).name, [x.holes[d.pg.holes[0].id]?.s, !!x.holes[d.pg.holes[0].id]?.official]])));
+    for (const ph of all) assert.deepEqual(await hole1(ph), { Mads: [1, true], Anna: [5, true], Bo: [2, false], Sara: [4, true] }, `${ph.name}: hole 1`);
+    await anna.page.waitForSelector('.pg-mine__locked', { timeout: 5000 });
+    assert.match(await anna.page.locator('.pg-mine__locked').textContent(), /5 slag.*Sat af dommeren/s, "Anna can't change the judge's score");
+    assert.equal(await derived(sara, (d) => d.pg.individuals.find((x) => d.players.get(x.pid).name === 'Mads').aces), 1, 'hole in one');
+
+    // A penalty for Bo, style points for Hold Rød.
+    await host.page.getByRole('button', { name: 'Straf eller bonus til Bo' }).click();
+    await host.page.locator('.sheet.is-open .pg-preset', { hasText: 'Spildt' }).click();
+    await host.page.waitForSelector('.sheet.is-open', { state: 'detached' });
+    await host.page.getByRole('button', { name: 'Straf eller bonus til Hold Rød' }).click();
+    await host.page.locator('.sheet.is-open .segmented__opt', { hasText: 'Bonus' }).click();
+    await host.page.locator('.sheet.is-open .pg-preset', { hasText: 'Stilpoint' }).click();
+    await host.page.waitForSelector('.sheet.is-open', { state: 'detached' });
+    await wait(900);
+    // Rød: Anna +2, Sara +1, style −1 → +2. Blå: Mads −2, Bo −1 + 1 penalty → −2.
+    for (const ph of all) assert.deepEqual(await standings(ph), [['Hold Blå', -2], ['Hold Rød', 2]], `${ph.name}: standings after hole 1`);
+    assert.deepEqual(await axeViolations(host.page, axeSource), [], 'the judge panel is accessible');
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the course tab is accessible');
+    await shot(host.page, 'e2e-pg-judge');
+
+    // The judge moves everyone on to hole 2.
+    await host.page.getByRole('button', { name: /Videre til hul 2/ }).click();
+    await host.page.getByRole('button', { name: 'Hul 2', exact: true }).click();
+    for (const ph of [anna, bo, sara]) await ph.page.waitForFunction(() => window.__skaal.derived().pg.current.n === 2, null, { timeout: 6000 });
+    await anna.page.waitForFunction((bar) => document.querySelector('.pg-hero__bar')?.textContent === bar, bars[1], { timeout: 3000 });
+    await tv.page.waitForFunction(() => document.querySelector('.pg-tv__n')?.textContent === 'Hul2/9', null, { timeout: 6000 });
+
+    // Photos: shared with everyone, deleted by their owner, liked.
+    const sharePhoto = async (ph, emoji, colors, caption) => {
+      await tab(ph, 'Fotos');
+      await ph.page.setInputFiles('.pg-upload input[type=file]', { name: 'photo.jpg', mimeType: 'image/jpeg', buffer: await photoOf(env.browser, emoji, colors) });
+      await ph.page.waitForSelector('.pg-share__img');
+      if (caption) await ph.page.fill('input[placeholder^="Skriv en tekst"]', caption);
+      await ph.page.getByRole('button', { name: 'Del med alle' }).click();
+      await ph.page.waitForSelector('.sheet.is-open', { state: 'detached' });
+    };
+    await sharePhoto(anna, '🍻', '#f6d365,#fda085', 'Skål fra Heidis!');
+    await sharePhoto(bo, '⛳', '#84fab0,#8fd3f4');
+    const tiles = (ph, n) => ph.page.waitForFunction((k) => document.querySelectorAll('.pg-tile > img').length === k, n, { timeout: 10000 });
+    for (const ph of [host, sara]) {
+      await tab(ph, 'Fotos');
+      await tiles(ph, 2);
+    }
+    await bo.page.locator('.pg-tile', { hasText: 'Bo' }).click();
+    await bo.page.locator('.pg-viewer__bar').getByRole('button', { name: 'Slet' }).click();
+    await bo.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Slet', exact: true }).click();
+    for (const ph of [host, sara, anna, bo]) await tiles(ph, 1);
+    await sara.page.locator('.pg-tile', { hasText: 'Anna' }).click();
+    await sara.page.locator('.pg-like').click();
+    await sara.page.locator('.sheet.is-open .sheet__close').click();
+    await anna.page.waitForSelector('.pg-tile__likes', { timeout: 5000 });
+    assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'the photo gallery is accessible');
+
+    // The judge puts Anna's photo first in the photo competition: a podium pops up everywhere.
+    await host.page.locator('.pg-tile', { hasText: 'Anna' }).click();
+    await host.page.getByRole('button', { name: /🥇 1\.-plads/ }).click();
+    for (const ph of [anna, bo, sara, tv]) await ph.page.waitForSelector('.pg-moment--podium', { timeout: 6000 });
+    assert.equal(await host.page.locator('.pg-moment').count(), 0, 'no pop-up for the judge who set it');
+    assert.match(await sara.page.locator('.pg-moment--podium .overlay__title').textContent(), /Fotokonkurrence/);
+    assert.equal(await sara.page.locator('.pg-moment--podium .pg-stage__photo').count(), 1, 'the winning photo is on the podium');
+    assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'the podium pop-up is accessible');
+    await shot(sara.page, 'e2e-pg-podium');
+    await closeMoments(all);
+    await tv.page.locator('.pg-moment').click();
+    await host.page.locator('.sheet.is-open .sheet__close').click();
+    await wait(600);
+    assert.deepEqual(await standings(bo), [['Hold Blå', -2], ['Hold Rød', -1]], 'photo podium: 3 strokes off for Anna’s team');
+
+    // Best outfit: Blå first, Rød second.
+    await tab(host, 'Konkurrencer');
+    await host.page.locator('.pg-comp', { hasText: 'Bedste outfit' }).getByRole('button', { name: 'Sæt podiet' }).click();
+    const rows = host.page.locator('.sheet.is-open .pg-podium-row');
+    await rows.nth(0).locator('.team-chip', { hasText: 'Hold Blå' }).click();
+    await rows.nth(1).locator('.team-chip', { hasText: 'Hold Rød' }).click();
+    await host.page.getByRole('button', { name: 'Gem podiet' }).click();
+    for (const ph of [anna, bo, sara, tv]) await ph.page.waitForSelector('.pg-moment--podium', { timeout: 6000 });
+    assert.match(await bo.page.locator('.pg-moment--podium .overlay__title').textContent(), /Bedste outfit/);
+    await closeMoments(all);
+    await tv.page.locator('.pg-moment').click();
+    await tab(sara, 'Konkurrencer');
+    assert.equal(await sara.page.locator('.pg-comp', { hasText: 'Bedste outfit' }).locator('.pg-place').count(), 2, 'everyone sees the podium');
+    assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'the competitions tab is accessible');
+    assert.deepEqual(await standings(anna), [['Hold Blå', -5], ['Hold Rød', -3]]);
+
+    // A challenge pops up on every phone; the judge crowns Hold Rød (3 strokes off), who take the lead.
+    await tab(host, 'Bane');
+    await host.page.locator('.pg-judge').getByRole('button', { name: 'Udfordring' }).click();
+    await host.page.getByRole('button', { name: 'Send til alle' }).click();
+    for (const ph of [...all, tv]) await ph.page.waitForSelector('.pg-moment:not(.pg-moment--podium)', { timeout: 6000 });
+    const challenge = await derived(sara, (d) => d.pg.challenges[0].text);
+    assert.equal(await bo.page.locator('.pg-moment__text').textContent(), challenge);
+    assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'the challenge pop-up is accessible');
+    await shot(bo.page, 'e2e-pg-challenge');
+    await closeMoments([anna, bo, sara]);
+    const crown = host.page.locator('.crown-pick');
+    await crown.getByRole('button', { name: 'Mere' }).click();
+    await crown.getByRole('button', { name: 'Mere' }).click();
+    await crown.locator('.team-chip', { hasText: 'Hold Rød' }).click();
+    await host.page.waitForSelector('.pg-moment', { state: 'detached' });
+    await tv.page.locator('.pg-moment').click();
+    await wait(900);
+    for (const ph of all) assert.deepEqual(await standings(ph), [['Hold Rød', -6], ['Hold Blå', -5]], `${ph.name}: standings after the challenge`);
+    assert.equal(await derived(bo, (d) => d.pg.challenges[0].winners.map((w) => d.pg.teamById.get(w.team).name).join()), 'Hold Rød');
+
+    // The big screen: the hole, the teams, the photo and the winners.
+    await tv.page.waitForSelector('.pg-moment', { state: 'detached' });
+    assert.match(await tv.page.locator('.pg-trow--tv').first().textContent(), /Hold Rød/);
+    assert.equal(await tv.page.locator('.pg-tv__photo > img').count(), 1);
+    assert.equal(await tv.page.locator('.pg-tv__comp').count(), 2, 'competition winners on the big screen');
+    assert.deepEqual(await axeViolations(tv.page, axeSource), [], 'the big screen is accessible');
+    await shot(tv.page, 'e2e-pg-tv');
+
+    // Standings: teams, players and the score card.
+    await tab(sara, 'Stilling');
+    for (const view of ['Hold', 'Spillere', 'Scorekort']) {
+      await sara.page.locator('.segmented__opt', { hasText: view }).click();
+      await wait(250);
+      assert.deepEqual(await axeViolations(sara.page, axeSource), [], `standings (${view}) are accessible`);
+    }
+
+    // The host hands the whistle to Anna: she gets the panel, the host loses it.
+    await tab(host, 'Mig');
+    await host.page.getByRole('button', { name: /Dommer: Mads/ }).click();
+    await host.page.locator('.sheet.is-open .list-item', { hasText: 'Anna' }).click();
+    await tab(anna, 'Bane');
+    await anna.page.waitForSelector('.pg-judge', { timeout: 6000 });
+    await tab(host, 'Bane');
+    assert.equal(await host.page.locator('.pg-judge').count(), 0, 'only one judge');
+    await judgeScore(anna, 'Bo', 3);
+    await tab(bo, 'Bane');
+    await bo.page.waitForSelector('.pg-mine__locked', { timeout: 6000 });
+    await wait(600);
+    assert.deepEqual(await standings(sara), [['Hold Rød', -6], ['Hold Blå', -3]], 'Bo: two over par on hole 2');
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the new judge’s panel is accessible');
+
+    // A small phone joins late: every tab fits 320px and passes axe.
+    const se = await joinPubGolf(env, code, 'Lille Lars Christian Kristensen', { size: { width: 320, height: 568, scale: 2 } });
+    await wait(800);
+    await closeMoments([se]);
+    for (const name of ['Bane', 'Stilling', 'Konkurrencer', 'Fotos', 'Mig']) {
+      await tab(se, name);
+      await wait(300);
+      const overflow = await se.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.equal(overflow, 0, `${name}: no horizontal scrolling at 320px`);
+      assert.deepEqual(await axeViolations(se.page, axeSource), [], `${name} at 320px: accessibility`);
+    }
+    await tab(se, 'Bane');
+    await shot(se.page, 'e2e-pg-320');
+
+    // The host ends the round: the result is the same on every phone.
+    await tab(host, 'Mig');
+    await host.page.getByRole('button', { name: /Afslut runden/ }).click();
+    await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Afslut', exact: true }).click();
+    await tab(sara, 'Bane');
+    await sara.page.waitForSelector('.pg-final', { timeout: 6000 });
+    assert.match(await sara.page.locator('.pg-final__title').textContent(), /Hold Rød vinder/);
+    await shot(sara.page, 'e2e-pg-final');
+    assertNoErrors(all.concat(tv, se));
+  },
+
   async 'resilience: offline logging, broker restart healing, continue on new phone, leave'(env) {
     const { ph: host, code } = await createEvent(env);
     const anna = await joinEvent(env, code, 'Anna');
@@ -523,7 +734,7 @@ for (const [name, fn] of Object.entries(scenarios)) {
     console.log(`✓ ${name} (${((Date.now() - started) / 1000).toFixed(1)} s)`);
   } catch (err) {
     failed++;
-    console.log(`✗ ${name}\n  ${err.stack?.split('\n').slice(0, 3).join('\n  ')}`);
+    console.log(`✗ ${name}\n  ${err.stack?.split('\n').slice(0, 12).join('\n  ')}`);
     for (const ph of env.phones) await shot(ph.page, `fail-${ph.name}`).catch(() => {});
   } finally {
     await env.teardown().catch(() => {});

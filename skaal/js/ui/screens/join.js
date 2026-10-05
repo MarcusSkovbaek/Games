@@ -6,6 +6,8 @@ import { ProfileForm } from './profile.js';
 import { navigate } from '../router.js';
 import { fmtPoints, plural } from '../format.js';
 import { pickPlayerColor } from '../../game/derive.js';
+import { setTeam } from '../../app/actions.js';
+import { TeamChip } from '../pubgolf/common.js';
 
 // Step 1: type the code.
 export function JoinCode({ initial }) {
@@ -63,11 +65,16 @@ export function JoinProfile({ room, d }) {
   const players = d.ranking.filter((p) => !p.left);
   const host = d.players.get(meta.hostId);
   const isHost = meta.hostId === room.pid;
+  const pg = d.pg;
+  const teams = pg && !pg.cfg.lockTeams ? pg.teams : [];
+  // Suggest the team with the fewest players.
+  const [team, setTeamChoice] = useState(() => [...teams].sort((a, b) => a.members.length - b.members.length)[0]?.id || null);
 
   const submit = ({ name, photo }) => {
     setBusy(true);
     room.setProfile({ name, photo, joinedAt: now(), left: 0, color: room.me?.profile?.color || pickPlayerColor(room) });
-    rememberEvent(room.code, { name: meta.name, host: isHost });
+    if (team && !pg.players.get(room.pid)?.team) setTeam(room, room.pid, team);
+    rememberEvent(room.code, { name: meta.name, host: isHost, type: meta.type || 'party' });
   };
 
   const claim = async (pid) => {
@@ -94,7 +101,16 @@ export function JoinProfile({ room, d }) {
         : html`<span class="muted" style=${{ fontSize: '14px' }}>${isHost ? 'Opret din profil — så kan du invitere de andre.' : 'Du er den første!'}</span>`}
     </div>
     <div style=${{ height: '22px' }}></div>
-    <${ProfileForm} submitLabel=${isHost ? 'Gem og invitér' : 'Deltag i festen'} busy=${busy} onSubmit=${submit}>
+    <${ProfileForm} submitLabel=${isHost ? 'Gem og invitér' : pg ? 'Deltag i pub golf' : 'Deltag i festen'} busy=${busy} onSubmit=${submit}>
+      ${teams.length
+        ? html`<div class="field">
+            <span class="field__label">Dit hold</span>
+            <div class="chips">
+              ${teams.map((tm) => html`<${TeamChip} team=${tm} active=${team === tm.id} onClick=${() => setTeamChoice(tm.id)}>${tm.name} · ${tm.members.length}<//>`)}
+            </div>
+            <span class="field__hint">Kan skiftes senere under “Mig”.</span>
+          </div>`
+        : null}
       ${!isHost && players.length
         ? html`<button type="button" class="text-link" onClick=${() => setClaimOpen(true)}>
             Allerede med fra en anden telefon? Fortsæt som dig selv
@@ -108,7 +124,7 @@ export function JoinProfile({ room, d }) {
             <${Avatar} player=${p} size=${40} />
             <span class="list-item__text">
               <span class="list-item__title">${p.name}</span>
-              <span class="list-item__sub">${fmtPoints(p.points)} point · ${plural(p.alcoholic, 'drink', 'drinks')}</span>
+              <span class="list-item__sub">${pg ? `${pg.players.get(p.pid)?.played || 0} huller spillet` : `${fmtPoints(p.points)} point · ${plural(p.alcoholic, 'drink', 'drinks')}`}</span>
             </span>
             <${Icon} name="chevron-right" size=${18} />
           </button>`,

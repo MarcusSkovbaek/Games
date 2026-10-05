@@ -35,7 +35,8 @@ export function InboxPopup({ room, d }) {
   useStore(seenVersion, (s) => s.v);
   const seen = seenKeys(room.roomId);
   const active = d.activeGame;
-  const overlayOpen = (active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || !!ui.spin || !!ui.tour || !!ui.toast;
+  const overlayOpen =
+    (active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || !!ui.spin || !!ui.tour || !!ui.toast || !!ui.pgChal || !!ui.pgPodium;
   // Sips from a live fællesskål or Tour moment are shown by that pop-up; a minigame's by its overlay.
   const claimed = (ob) =>
     (ob.gid && active?.gid === ob.gid) ||

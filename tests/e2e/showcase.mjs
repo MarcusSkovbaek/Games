@@ -1,7 +1,7 @@
 // Regenerates the README screenshots in docs/screenshots/ (npm run screenshots).
 import { fileURLToPath } from 'node:url';
 import { setup } from './lib.mjs';
-import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin } from './helpers.mjs';
+import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin, createPubGolf, joinPubGolf } from './helpers.mjs';
 
 const OUT = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -115,6 +115,98 @@ try {
   await sara.page.waitForSelector('.tour.is-revealed', { timeout: 10000 });
   await wait(2600); // let the confetti settle
   await save(sara.page, '10-tour-ansigt');
+  for (const ph of all) await ph.context.close();
+
+  // Pub golf: two teams, the host judges. Holes 1 and 2 are played; the group is at hole 3.
+  const golf = await createPubGolf(env, { bars: ["Heidi's Bier Bar", 'Mikkeller', 'Kihoskh'], team: 'Hold Blå', photo: await photoOf(env.browser, '😎', '#ff9a8b,#ff6a88') });
+  const judge = golf.ph;
+  const gAnna = await joinPubGolf(env, golf.code, 'Anna', { team: 'Hold Rød', photo: await photoOf(env.browser, '🦊', '#a1c4fd,#c2e9fb') });
+  const gBo = await joinPubGolf(env, golf.code, 'Bo', { team: 'Hold Blå', photo: await photoOf(env.browser, '🐻', '#fbc2eb,#a6c1ee') });
+  const gSara = await joinPubGolf(env, golf.code, 'Sara', { team: 'Hold Rød', photo: await photoOf(env.browser, '🐼', '#d4fc79,#96e6a1') });
+  const golfers = [judge, gAnna, gBo, gSara];
+  const play = (ph, strokes) =>
+    ph.page.evaluate((list) => {
+      const room = window.__skaal.session.get().room;
+      const holes = window.__skaal.derived().pg.holes;
+      room.appendMany(list.map((s, i) => ({ t: 'pg', p: room.pid, h: holes[i].id, s })));
+    }, strokes);
+  await play(gAnna, [3, 1]);
+  await play(gBo, [2, 2]);
+  await play(gSara, [4, 1]);
+  await play(judge, [2, 1]);
+  await judge.page.evaluate(() => {
+    const room = window.__skaal.session.get().room;
+    const d = window.__skaal.derived();
+    const holes = d.pg.holes;
+    room.appendMany([
+      { t: 'pgpen', p: d.ranking.find((p) => p.name === 'Bo').pid, n: 1, why: 'Spildt', h: holes[1].id },
+      { t: 'pgbon', team: 't1', n: 1, why: 'Stilpoint', h: holes[1].id },
+      { t: 'hole', h: holes[2].id },
+    ]);
+  });
+  await wait(1500);
+  await gAnna.page.getByRole('button', { name: '2 slag', exact: true }).click();
+  await gBo.page.getByRole('button', { name: '3 slag', exact: true }).click();
+  await wait(5500); // let toasts fade
+  await save(gAnna.page, '14-pubgolf-bane');
+  await judge.page.evaluate(() => {
+    const el = document.querySelector('.pg-judge');
+    window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 84);
+  });
+  await wait(500);
+  await save(judge.page, '15-pubgolf-dommer');
+  await tab(gSara, 'Stilling');
+  await wait(800);
+  await save(gSara.page, '16-pubgolf-stilling');
+
+  // Photos, and the photo competition's podium on every phone.
+  const shares = [
+    [gAnna, '🍻', '#f6d365,#fda085', 'Skål fra Heidis!'],
+    [gBo, '⛳', '#84fab0,#8fd3f4', 'Hold Blå på green'],
+    [gSara, '🎤', '#a18cd1,#fbc2eb', 'Karaoke på Kihoskh'],
+  ];
+  for (const [ph, emoji, colors, caption] of shares) {
+    await tab(ph, 'Fotos');
+    await ph.page.setInputFiles('.pg-upload input[type=file]', { name: 'photo.jpg', mimeType: 'image/jpeg', buffer: await photoOf(env.browser, emoji, colors) });
+    await ph.page.waitForSelector('.pg-share__img');
+    await ph.page.fill('input[placeholder^="Skriv en tekst"]', caption);
+    await ph.page.getByRole('button', { name: 'Del med alle' }).click();
+    await ph.page.waitForSelector('.sheet.is-open', { state: 'detached' });
+  }
+  await tab(judge, 'Fotos');
+  await judge.page.waitForFunction(() => document.querySelectorAll('.pg-tile > img').length === 3, null, { timeout: 10000 });
+  for (const [i, name] of ['Anna', 'Sara', 'Bo'].entries()) {
+    await judge.page.locator('.pg-tile', { hasText: name }).click();
+    await judge.page.getByRole('button', { name: new RegExp(`${i + 1}\\.-plads`) }).click();
+    await judge.page.locator('.sheet.is-open .sheet__close').click();
+    await wait(400);
+  }
+  await gBo.page.waitForSelector('.pg-moment--podium .pg-stage__photo + .pg-stage__name', { timeout: 6000 });
+  await gBo.page.waitForFunction(() => document.querySelectorAll('.pg-moment--podium .pg-stage__photo').length === 3, null, { timeout: 6000 });
+  await wait(2600); // let the confetti settle
+  await save(gBo.page, '17-pubgolf-podie');
+  for (const ph of golfers) {
+    for (let i = 0; i < 4; i++) {
+      const btn = ph.page.locator('.pg-moment .pg-moment__actions .btn').last();
+      if (!(await btn.count())) break;
+      await btn.click();
+      await wait(350);
+    }
+  }
+  await tab(gSara, 'Fotos');
+  await wait(800);
+  await save(gSara.page, '18-pubgolf-fotos');
+
+  const golfTv = await env.phone('tv', { width: 1280, height: 720, scale: 1.5 });
+  await golfTv.page.goto(env.appUrl(`#/tv/${golf.code}`));
+  await golfTv.page.waitForSelector('.pg-tv__hole');
+  await wait(1200);
+  for (let i = 0; i < 4 && (await golfTv.page.locator('.pg-moment').count()); i++) {
+    await golfTv.page.locator('.pg-moment').last().click();
+    await wait(500);
+  }
+  await wait(800);
+  await save(golfTv.page, '19-pubgolf-storskaerm');
   console.log('screenshots written to docs/screenshots/');
 } finally {
   await env.teardown();

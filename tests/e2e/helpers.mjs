@@ -45,6 +45,40 @@ export async function joinEvent(env, code, name, photo) {
   return ph;
 }
 
+// A pub golf event: the host picks the type, names the first bars and joins a team.
+export async function createPubGolf(env, { name = 'Pub golf på Vesterbro', host = 'Mads', bars = [], team, photo } = {}) {
+  const ph = await env.phone(host);
+  const p = ph.page;
+  await p.goto(env.appUrl('#/ny'));
+  await p.getByRole('radio', { name: /Pub golf/ }).click();
+  await p.fill('input[placeholder^="Fx Pub golf"]', name);
+  for (const [i, bar] of bars.entries()) await p.fill(`input[aria-label="Bar på hul ${i + 1}"]`, bar);
+  await p.getByRole('button', { name: 'Opret pub golf' }).click();
+  await p.waitForSelector('.event-preview', { timeout: 15000 });
+  if (photo) await setPhoto(p, photo);
+  await p.fill('input[name=name]', host);
+  if (team) await p.locator('.team-chip', { hasText: team }).click();
+  await p.getByRole('button', { name: /Gem og invitér/ }).click();
+  await p.waitForSelector('.qr svg');
+  const code = await p.evaluate(() => location.hash.split('/')[2]);
+  await p.locator('.sheet__close').first().click();
+  await p.waitForSelector('.pg-hero');
+  return { ph, code };
+}
+
+export async function joinPubGolf(env, code, name, { team, photo, size } = {}) {
+  const ph = await env.phone(name, size);
+  const p = ph.page;
+  await p.goto(env.appUrl(`#/e/${code}`));
+  await p.waitForSelector('.event-preview', { timeout: 15000 });
+  if (photo) await setPhoto(p, photo);
+  await p.fill('input[name=name]', name);
+  if (team) await p.locator('.team-chip', { hasText: team }).click();
+  await p.getByRole('button', { name: /Deltag i pub golf/ }).click();
+  await p.waitForSelector('.pg-hero', { timeout: 10000 });
+  return ph;
+}
+
 export async function logDrink(ph, label, times = 1) {
   for (let i = 0; i < times; i++) {
     await ph.page.locator('.drink-tile', { hasText: label }).first().click();

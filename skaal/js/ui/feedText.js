@@ -81,6 +81,24 @@ export function FeedText({ d, item, emoji = false }) {
     }
     case 'pause':
       return item.on ? html`${who} holder pause ⏸️` : html`${who} er tilbage fra pause ▶️`;
+    case 'pghole': {
+      const h = d.pg?.holeById.get(item.h);
+      return html`${emoji ? '⛳ ' : ''}Videre til ${B(`hul ${h?.n ?? ''}`)}${h?.bar ? html` — ${h.bar}` : null} <span class="faint">(par ${h?.par})</span>`;
+    }
+    case 'pgace':
+      return html`${emoji ? '🎯 ' : ''}${who} lavede ${B('hole in one')} på hul ${d.pg?.holeById.get(item.h)?.n ?? ''}!`;
+    case 'pgpen':
+    case 'pgbon':
+      return adjustmentText(d, item.adj, emoji);
+    case 'pgpodium': {
+      const comp = d.pg?.comps.find((c) => c.id === item.result.comp);
+      const places = item.result.places.map((pl, i) => (pl ? `${i + 1}. ${pl.team ? d.pg.teamById.get(pl.team)?.name : d.players.get(pl.pid)?.name}` : null)).filter(Boolean);
+      return html`${emoji ? '🏆 ' : ''}${B(comp?.name || 'Konkurrence')}: ${places.length ? places.join(' · ') : 'podiet er nulstillet'}`;
+    }
+    case 'pgphoto':
+      return html`${emoji ? '📸 ' : ''}${who} delte et billede`;
+    case 'pgchal':
+      return html`${emoji ? '🎲 ' : ''}Udfordring: ${item.text}`;
     case 'tour': {
       const face = faceById(item.face);
       return html`${emoji ? '🚴 ' : ''}${who} har kørt ${item.n} etaper → ${B(face ? `${face.name}: ${face.title}` : 'Tour de France')}`;
@@ -88,6 +106,14 @@ export function FeedText({ d, item, emoji = false }) {
     default:
       return null;
   }
+}
+
+function adjustmentText(d, adj, emoji) {
+  const target = adj.team ? B(d.pg?.teamById.get(adj.team)?.name || 'Holdet') : B(nameOf(d, adj.p));
+  const why = adj.why ? html` <span class="faint">(${adj.why})</span>` : null;
+  return adj.kind === 'pen'
+    ? html`${emoji ? '⚠️ ' : ''}${target} fik ${B(`+${adj.n} strafslag`)}${why}`
+    : html`${emoji ? '⭐ ' : ''}${target} fik ${B(`−${adj.n} slag`)} i bonus${why}`;
 }
 
 function ackText(d, item) {

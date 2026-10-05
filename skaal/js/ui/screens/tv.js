@@ -12,6 +12,7 @@ import { FeedText, gameSummary } from '../feedText.js';
 import { TITLE_EMOJI } from './board.js';
 import { TourOverlay, SongButton } from './tour.js';
 import { GroupToastOverlay } from './groupToast.js';
+import { PgTv } from '../pubgolf/tv.js';
 import { stopTourSong } from '../tourSong.js';
 import { audioReady, audioContext } from '../feedback.js';
 import { prefs } from '../ui-store.js';
@@ -59,6 +60,7 @@ export function TvRoute({ code }) {
     return html`<main class="page"><div class="empty" style=${{ paddingTop: '120px' }}><${Spinner} size=${34} /><div class="empty__title">Forbinder til ${formatCode(code)}…</div></div></main>`;
   }
   const d = getDerived(room, now());
+  if (d.pg) return html`<${PgTv} room=${room} d=${d} code=${code} />`;
   const rows = d.ranking.filter((p) => !p.left).slice(0, 10);
   const inst = d.activeGame;
   const game = inst ? gameById(inst.g) : null;

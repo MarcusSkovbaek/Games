@@ -3,7 +3,8 @@
 SKÅL er en web-app til festen: Opret et event, lad vennerne scanne QR-koden, og alle registrerer
 øl, shots, drinks og Jägerbombs fra deres egen telefon. Stillingen opdateres live, lykkehjul popper
 op, når man tager føringen eller kommer bagud, og breakers (minigames for alle) holder gang i
-festen undervejs.
+festen undervejs. Skal I på barrunde, så vælg [pub golf](#pub-golf): hold, en dommer, straf- og
+bonusslag, konkurrencer med podie og fotos, som alle kan se.
 
 Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, ingen build-trin.
 
@@ -28,6 +29,16 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   <img src="docs/screenshots/10-tour-ansigt.jpg" width="190" alt="Tour de France: et ansigt dukker op ved 21 drinks" />
 </p>
 <p><img src="docs/screenshots/8-storskaerm.jpg" width="780" alt="Storskærm" /></p>
+<p>
+  <img src="docs/screenshots/14-pubgolf-bane.jpg" width="190" alt="Pub golf: hullet, dine slag og dit hold" />
+  <img src="docs/screenshots/15-pubgolf-dommer.jpg" width="190" alt="Pub golf: dommerpanelet" />
+  <img src="docs/screenshots/16-pubgolf-stilling.jpg" width="190" alt="Pub golf: holdstillingen" />
+</p>
+<p>
+  <img src="docs/screenshots/17-pubgolf-podie.jpg" width="190" alt="Pub golf: podiet i fotokonkurrencen popper op hos alle" />
+  <img src="docs/screenshots/18-pubgolf-fotos.jpg" width="190" alt="Pub golf: fotos, som alle kan se" />
+</p>
+<p><img src="docs/screenshots/19-pubgolf-storskaerm.jpg" width="780" alt="Pub golf på storskærmen" /></p>
 
 ## Funktioner
 
@@ -53,6 +64,9 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 - **Tour de France-tilstand** — føreren bærer den gule trøje (hjelm og racerbriller på sit billede),
   og når en rytter når 21 drinks, dukker Henning Primdahl, Bobby eller Pimm op på alles telefoner —
   hver med sin egen effekt — mens Tour-sangen spiller. Se [Tour de France](#tour-de-france).
+- **Pub golf** — barerne er hullerne, og slurkene er slagene. Spil i hold med én dommer, der
+  noterer slag, giver straf- og bonusslag, sender udfordringer og sætter podiet i konkurrencerne
+  (bl.a. en fotokonkurrence). Se [Pub golf](#pub-golf).
 - **Straffe og skjolde** — slurke du får tildelt, popper op med hvem de er fra og hvorfor, plus
   "Skål — drukket ✓". Et skjold kan bruges til at slippe, og "Senere" gemmer dem på Drik-fanen.
 - **Feed med reaktioner**, **storskærm** (`#/tv/<kode>`) til tv'et, **slutresultat** med podie og
@@ -69,6 +83,42 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 
 Alle andre statiske hosts virker også (Netlify, Vercel, Cloudflare Pages …). Appen kræver https,
 fordi den krypterer alt.
+
+## Pub golf
+
+Vælg **Pub golf** øverst, når du opretter eventet. Hver bar er et hul: Alle drikker hullets drik,
+og antallet af slurke er ens slag — som i golf vinder den laveste score.
+
+- **Banen:** 9 huller som standard (op til 18), hver med bar, drik, par (de slurke, drikken bør
+  tage) og eventuelt en adresse, der åbner kortet. Tilføj, fjern og ret hullerne, når eventet
+  oprettes, eller senere under **Mig → Bane, hold og konkurrencer**.
+- **Hold:** Spillerne vælger hold, når de deltager (det mindste hold er foreslået), og kan skifte
+  under *Mig*. Værten kan låse holdene, og værten eller dommeren kan blande dem. Holdets score er
+  summen af spillernes — eller gennemsnittet, hvis holdene er forskellige store — plus holdets egne
+  straf- og bonusslag. Stillingen viser både hold og enkeltspillere.
+- **Dommeren:** Der er altid præcis én dommer: værten, indtil værten udpeger en anden under *Mig*.
+  Dommeren kan godt spille med på et hold og får et dommerpanel på *Bane* med alles slag på hullet,
+  straf og bonus til spillere og hold, *Videre til næste hul* (alle telefoner skifter med) og
+  udfordringer. Udpeges en ny dommer, mister den forrige sine rettigheder, men det, vedkommende
+  nåede at notere som dommer, står ved magt.
+- **Slag:** Spillerne noterer selv deres slurke (kan slås fra), men dommeren har sidste ord: En
+  score, dommeren har sat, kan spilleren ikke ændre. *Opgiv hullet* giver par + 4.
+- **Straf og bonus:** Strafslag lægges til (fx spildt, toiletbesøg eller drak ikke ud), og bonusslag
+  trækkes fra (fx stilpoint eller godt holdspil). Vælg et forslag, eller skriv selv årsag og antal.
+- **Underholdning undervejs:** Dommeren trækker en udfordring (eller skriver sin egen), og den
+  popper op på alle telefoner og storskærmen. Vinderen kåres direkte fra pop-up'en eller senere
+  under *Konkurrencer* og får 1–3 slag i bonus. Minigames fra fest-tilstanden kan også startes der.
+- **Konkurrencer med podie:** Fotokonkurrence, bedste outfit, bedste holdsang og bedste holdånd
+  som standard; I kan tilføje jeres egne. Dommeren sætter 1.-, 2.- og 3.-pladsen, podiet popper op
+  hos alle og står under *Konkurrencer*, og pladserne giver holdet bonusslag (3, 2 og 1 som
+  standard, kan ændres).
+- **Fotos:** Alle kan dele billeder med en tekst, og alle kan se og like dem. Fotokonkurrencens
+  podie vælges blandt de delte billeder. Man kan slette sine egne billeder, og dommeren kan skjule
+  andres. Billederne krypteres som alt andet og fylder højst ca. 140 KB hver; *Slet eventet* fjerner
+  dem fra serverne.
+- **Scorekort og storskærm:** Scorekortet viser alle huller for alle spillere. Storskærmen viser
+  hullet, holdene, de bedste spillere, de seneste billeder og konkurrencevinderne, og *Afslut
+  runden* fryser stillingen og kårer vinderholdet.
 
 ## Tour de France
 
@@ -173,6 +223,13 @@ Navne, tekster og effekter for ansigterne står i [`skaal/js/game/tour.js`](skaa
 i lykkehjulene, og `tourContext()` giver rytterens nærmeste konkurrenter. Tegningerne ligger i
 [`skaal/js/ui/tourArt.js`](skaal/js/ui/tourArt.js).
 
+### Pub golf: udfordringer, straffe og konkurrencer
+
+Standardbanen (drik og par pr. hul), forslagene til straf og bonus, udfordringerne og
+standardkonkurrencerne er almindelige lister øverst i
+[`skaal/js/game/pubgolf.js`](skaal/js/game/pubgolf.js) (`COURSE_TEMPLATE`, `PENALTIES`, `BONUSES`,
+`CHALLENGES` og `DEFAULT_COMPS`). Skærmene ligger i [`skaal/js/ui/pubgolf/`](skaal/js/ui/pubgolf/).
+
 ### Mere indhold
 
 Spørgsmål, "Jeg har aldrig…", regler, sandheder og konsekvenser ligger som almindelige lister i
@@ -190,7 +247,7 @@ Kræver Node 22+ (kun til udvikling og tests — appen selv kører direkte i bro
 ```bash
 npm install          # kun testværktøjer — appen selv har ingen afhængigheder
 npm run dev          # lokal server + lokal MQTT-broker → åbn den viste URL i flere faner
-npm test             # unit-tests: kryptering, MQTT-protokol, synk, point, minigames, ydelse
+npm test             # unit-tests: kryptering, MQTT-protokol, synk, point, minigames, pub golf, ydelse
 npm run test:e2e     # browser-tests: flere "telefoner" spiller et helt event mod en lokal broker
 npm run screenshots  # genskaber billederne i docs/screenshots/
 ```
@@ -207,9 +264,10 @@ skaal/
   js/config.js                              brokere og spil-konstanter
   js/core/                                  kryptering, id'er, ur, seeded random, storage
   js/sync/                                  MQTT-klient og synkronisering (Room)
-  js/game/                                  drinks, indstillinger, point/afledt state, hjul, tidsplan, Tour
+  js/game/                                  drinks, indstillinger, point/afledt state, hjul, tidsplan,
+                                            Tour, pub golf
   js/minigames/                             ét modul pr. minigame + registry
-  js/ui/                                    komponenter, skærme, lyd, grafik
+  js/ui/                                    komponenter, skærme, lyd, grafik (pub golf i js/ui/pubgolf/)
 tests/unit, tests/e2e                       automatiske tests
 ```
 

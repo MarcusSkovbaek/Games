@@ -29,6 +29,20 @@ function glyphFor(item) {
       return item.on ? '⏸️' : '▶️';
     case 'tour':
       return '🚴';
+    case 'pghole':
+      return '⛳';
+    case 'pgace':
+      return '🎯';
+    case 'pgpen':
+      return '⚠️';
+    case 'pgbon':
+      return '⭐';
+    case 'pgpodium':
+      return '🏆';
+    case 'pgphoto':
+      return '📸';
+    case 'pgchal':
+      return '🎲';
     default:
       return '✨';
   }

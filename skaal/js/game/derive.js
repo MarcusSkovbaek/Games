@@ -7,6 +7,7 @@ import { buildInstances, phaseOf, isPausedAt, RESULT_GRACE_MS } from './schedule
 import { gameById } from '../minigames/index.js';
 import { hashString } from '../core/rng.js';
 import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
+import { derivePubGolf } from './pubgolf.js';
 
 // Player identity colours: a categorical palette validated for colour-blind separation and
 // contrast against the app's dark surface. Assigned in fixed slot order as players join.
@@ -402,6 +403,10 @@ export function derive(room, t) {
     feed.push({ key: `g:${inst.gid}`, ts: inst.result ? inst.playEnd : inst.start, kind: 'game', inst });
   }
   for (const { pid, e } of list('pause')) feed.push({ key: `${pid}:${e.id}`, ts: e.ts, kind: 'pause', pid, on: !!e.on });
+
+  // Pub golf events: course, teams, scores, competitions and photos.
+  const pg = meta?.type === 'pubgolf' ? derivePubGolf({ meta, players, list, assets, t, me }) : null;
+  if (pg) feed.push(...pg.feed);
   feed.sort((a, b) => b.ts - a.ts);
 
   const reactions = new Map();
@@ -447,6 +452,7 @@ export function derive(room, t) {
     reactions,
     tour,
     toasts,
+    pg,
     leaderChanges,
     totals,
     myEntries: (st.players[me] ? [...st.players[me].entries.values()] : []).sort((a, b) => b.ts - a.ts),

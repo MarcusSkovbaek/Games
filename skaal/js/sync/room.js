@@ -5,7 +5,7 @@
 //   <root>/<roomId>/p/<pid>/i    player profile (name, photo)      — last-writer-wins on `v`
 //   <root>/<roomId>/p/<pid>/l    player log: a grow-only set of entries, merged by id (CRDT)
 //   <root>/<roomId>/p/<pid>/o    presence heartbeat (+ last will when the connection drops)
-//   <root>/<roomId>/a/<name>     shared images set by the host (Tour faces, mask) — LWW on `v`
+//   <root>/<roomId>/a/<name>     shared images (Tour faces and mask, pub golf photos) — LWW on `v`
 //
 // Every player only appends to their own log, so concurrent writes never conflict and every
 // device converges on the same state regardless of message order. Any device can "heal" a broker
@@ -224,6 +224,17 @@ export class Room extends Emitter {
     return this.state.assets[name]?.data || null;
   }
 
+  // Put back an image this device kept itself (e.g. its own photo after a reload); brokers that
+  // lost it get it again when healing.
+  restoreAsset(name, asset) {
+    const clean = ASSET_NAME.test(name) ? cleanAsset(asset) : null;
+    const cur = this.state.assets[name];
+    if (!clean || (cur && !newer(clean, cur))) return false;
+    this.state.assets[name] = clean;
+    this._changed();
+    return true;
+  }
+
   // Wipes the event from the brokers (host action). Other devices see `deleted` and clean up.
   async destroy() {
     this.setMeta({ deleted: true });
@@ -326,7 +337,9 @@ export class Room extends Emitter {
     const assets = meta?.deleted ? [] : Object.entries(this.state.assets);
     for (const [name, a] of assets) {
       const rel = `a/${name}`;
-      tasks.push({ rel, own: this.isHost(), stale: () => !b.seen.get(rel) || newer(a, b.seen.get(rel)), data: () => this.state.assets[name] });
+      // Photos ("ph-<owner>-…") belong to whoever took them; other shared images to the host.
+      const own = name.startsWith('ph-') ? name.startsWith(`ph-${this.pid.slice(0, 16)}-`) : this.isHost();
+      tasks.push({ rel, own, stale: () => !b.seen.get(rel) || newer(a, b.seen.get(rel)), data: () => this.state.assets[name] });
     }
     for (const [pid, p] of players) {
       const own = pid === this.pid;
@@ -483,7 +496,9 @@ export class Room extends Emitter {
     for (const [pid, p] of Object.entries(this.state.players)) {
       players[pid] = { profile: p.profile, entries: [...p.entries.values()] };
     }
-    const snapshot = { meta: this.state.meta, players, assets: this.state.assets, savedAt: Date.now() };
+    // Photos are too big for localStorage; they live on the brokers (and with their owner).
+    const assets = Object.fromEntries(Object.entries(this.state.assets).filter(([name]) => !name.startsWith('ph-')));
+    const snapshot = { meta: this.state.meta, players, assets, savedAt: Date.now() };
     if (this.state.meta?.deleted) {
       storage.remove(`room:${this.roomId}`);
       return;

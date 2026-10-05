@@ -98,7 +98,7 @@ export function Avatar({ player, size = 44, online, ring, class: className, badg
       ? html`<img src=${player.photo} alt="" loading="lazy" decoding="async" draggable="false" />`
       : html`<span class="avatar__initials">${initials(player?.name)}</span>`}
     ${jersey ? html`<${LeaderMask} src=${player.mask} glasses=${!!player.photo} />` : null}
-    ${online ? html`<span class="avatar__dot" aria-label="Online"></span>` : null}
+    ${online ? html`<span class="avatar__dot" role="img" aria-label="Online"></span>` : null}
     ${badge ? html`<span class="avatar__badge">${badge}</span>` : null}
   </span>`;
 }
@@ -176,7 +176,7 @@ export function IconButton({ icon, label, class: className, size = 22, ...rest }
 }
 
 export function Spinner({ size = 22 }) {
-  return html`<span class="spinner" style=${{ width: `${size}px`, height: `${size}px` }} aria-label="Indlæser"></span>`;
+  return html`<span class="spinner" style=${{ width: `${size}px`, height: `${size}px` }} role="img" aria-label="Indlæser"></span>`;
 }
 
 export function Switch({ checked, onChange, label, hint, disabled }) {

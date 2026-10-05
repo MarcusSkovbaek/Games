@@ -20,6 +20,7 @@ import { InboxPopup } from './inbox.js';
 import { FinalScreen } from './final.js';
 import { TourOverlay, SongButton } from './tour.js';
 import { GroupToastOverlay } from './groupToast.js';
+import { PgEventApp } from '../pubgolf/app.js';
 import { stopTourSong } from '../tourSong.js';
 
 // UI state that should survive switching tabs.
@@ -65,7 +66,7 @@ export function EventRoute({ code }) {
   if (!me || !me.name || me.left) {
     return html`<${JoinProfile} room=${room} d=${d} />`;
   }
-  return html`<${EventApp} room=${room} />`;
+  return d.pg ? html`<${PgEventApp} room=${room} />` : html`<${EventApp} room=${room} />`;
 }
 
 function Removed({ code }) {
@@ -108,7 +109,7 @@ function EventApp({ room }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
     // Every event starts on the drinks tab with nothing open.
     eventUi.set({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null });
-    rememberEvent(room.code, { name: d.meta.name, host: d.isHost });
+    rememberEvent(room.code, { name: d.meta.name, host: d.isHost, type: d.meta.type || 'party' });
     // A fresh host gets the invitation (QR code) straight away.
     if (d.isHost && d.players.size <= 1 && !storage.load(`invited:${room.roomId}`)) {
       storage.save(`invited:${room.roomId}`, true);
@@ -180,7 +181,7 @@ function EventApp({ room }) {
   </div>`;
 }
 
-function Topbar({ room, d, sync }) {
+export function Topbar({ room, d, sync }) {
   const sound = useStore(prefs, (s) => s.sound);
   const online = sync?.online || 0;
   const syncState = online ? 'online' : sync?.brokers?.some((b) => b.status === 'connecting') ? 'connecting' : 'offline';

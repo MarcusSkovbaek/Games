@@ -153,7 +153,7 @@ function TourMoment({ room, d, moment, tv, onClose }) {
                     ${hits.map(
                       (ob) => html`<span class=${cx('tour-hit', ob.acked && 'is-done')} key=${`${ob.key}|${ob.target}`}>
                         <${Avatar} player=${d.players.get(ob.target)} size=${tv ? 40 : 28} />
-                        <span>${nameOf(d, ob.target)}</span><b>${unitText(ob.n, ob.unit)}</b>${ob.acked ? html`<span aria-label=${ob.how === 'shield' ? 'skjold brugt' : 'drukket'}>${ob.how === 'shield' ? '🛡️' : '✓'}</span>` : null}
+                        <span>${nameOf(d, ob.target)}</span><b>${unitText(ob.n, ob.unit)}</b>${ob.acked ? html`<span role="img" aria-label=${ob.how === 'shield' ? 'skjold brugt' : 'drukket'}>${ob.how === 'shield' ? '🛡️' : '✓'}</span>` : null}
                       </span>`,
                     )}
                   </div>`
