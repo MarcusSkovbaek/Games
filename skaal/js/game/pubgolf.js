@@ -12,6 +12,9 @@
 //   team    { p, team }            p plays for team (null = no team)          — p or an official
 //   hole    { h }                  the group moves on to hole h               — officials
 //   podium  { c, places | photos } result of competition c                   — officials
+//   pgcomp  { c }                  competition c starts (pops up on every phone) — officials
+//   pgvis   { show }               whether players see the competitions before they start
+//                                  (default yes; the latest one counts)       — officials
 //   chal    { c | text }           a challenge for the teams                  — officials
 // Photos (and hiding them) work as in every event — see game/photos.js.
 // Officials are the host and the judge. The host appoints the judge (meta.judges keeps every
@@ -260,6 +263,17 @@ export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, 
   }
 
   // ------------------------------------------------------------------------ competitions
+  // The judge decides whether the players see the competitions from the start, or each one only
+  // when the judge starts it (it then pops up on every phone). A podium shows it too.
+  let compsOnShow = true;
+  for (const { pid, e } of list('pgvis')) if (officialAt(pid, e.ts) && typeof e.show === 'boolean') compsOnShow = e.show;
+  const started = new Map(); // compId → { key, comp, by, ts } (the first start counts)
+  for (const { pid, e } of list('pgcomp')) {
+    if (!officialAt(pid, e.ts) || !compById.has(e.c) || started.has(e.c)) continue;
+    const start = { key: `${pid}:${e.id}`, comp: e.c, by: pid, ts: e.ts };
+    started.set(e.c, start);
+    feed.push({ key: start.key, ts: e.ts, kind: 'pgcomp', pid, comp: e.c });
+  }
   const results = new Map(); // compId → { places: [{ team?, pid?, photo? } | null ×3], by, ts, key }
   for (const { pid, e } of list('podium')) {
     const comp = compById.get(e.c);
@@ -360,12 +374,15 @@ export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, 
   // ------------------------------------------------------------------------- this hole
   const hole = holeById.get(current);
   const done = [...players.values()].filter((p) => !p.left && scores.has(`${p.pid}|${current}`)).length;
+  const isOfficial = !!me && (me === hostId || me === judge);
+  // Not started, not decided, and the judge keeps the competitions secret.
+  const secret = (c) => !compsOnShow && !started.has(c.id) && !results.get(c.id)?.places.some(Boolean);
 
   return {
     cfg,
     judge,
     isJudge: me === judge,
-    isOfficial: !!me && (me === hostId || me === judge),
+    isOfficial,
     holes: cfg.course.map((h) => holeById.get(h.id)),
     holeById,
     current: hole,
@@ -379,7 +396,11 @@ export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, 
     myTeam: teamOf.get(me) ? teamById.get(teamOf.get(me)) : null,
     adjustments,
     results,
-    comps: cfg.comps,
+    // Officials see every competition; players the ones that aren't secret (any more).
+    comps: isOfficial ? cfg.comps : cfg.comps.filter((c) => !secret(c)),
+    secretComps: cfg.comps.filter(secret),
+    compsOnShow,
+    started,
     challenges,
     feed,
     now: t,

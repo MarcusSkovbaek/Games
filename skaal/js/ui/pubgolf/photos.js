@@ -45,11 +45,15 @@ export function PhotosTab({ room, d }) {
         </section>`
       : null}
 
-    <${CameraCard} room=${room} d=${d} text="Alle i eventet kan se det — de bedste kan vinde fotokonkurrencen" />
+    <${CameraCard} room=${room} d=${d} text=${comp ? 'Alle i eventet kan se det — de bedste kan vinde fotokonkurrencen' : null} />
 
     ${d.photos.length
       ? html`<${PlayButton} d=${d} label="Afspil runden" /><${PhotoGrid} room=${room} d=${d} photos=${d.photos} badge=${badge} />`
-      : html`<${Empty} icon="camera" title="Ingen billeder endnu" text="Tag det første billede — de bedste kan vinde fotokonkurrencen." />`}
+      : html`<${Empty}
+          icon="camera"
+          title="Ingen billeder endnu"
+          text=${comp ? 'Tag det første billede — de bedste kan vinde fotokonkurrencen.' : 'Tag det første billede fra runden — alle i eventet kan se det.'}
+        />`}
   </div>`;
 }
 

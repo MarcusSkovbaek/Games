@@ -16,7 +16,7 @@ import { StandingsTab } from './standings.js';
 import { CompetitionsTab } from './comps.js';
 import { PhotosTab, PhotoPlaces } from './photos.js';
 import { PgMeTab } from './me.js';
-import { ChallengeOverlay, PodiumOverlay } from './overlays.js';
+import { ChallengeOverlay, CompStartOverlay, PodiumOverlay } from './overlays.js';
 import { holeTitle } from './common.js';
 
 const TABS = [
@@ -102,6 +102,7 @@ export function PgEventApp({ room }) {
     </nav>
     <${BreakerOverlay} room=${room} d=${d} />
     <${ChallengeOverlay} room=${room} d=${d} />
+    <${CompStartOverlay} room=${room} d=${d} />
     <${PodiumOverlay} room=${room} d=${d} />
     <${InboxPopup} room=${room} d=${d} />
     <${InviteSheet} room=${room} d=${d} open=${ui.invite} onClose=${() => eventUi.set({ invite: false })} />

@@ -215,3 +215,45 @@ test('photos: the judge hides and sets the photo podium, which rewards the team'
   assert.equal(d.canHidePhotos, false, 'Anna is neither host nor judge');
   assert.equal(derive({ ...room, pid: 'judy0000' }, T0 + 600 * MIN).canHidePhotos, true);
 });
+
+test('secret competitions: players see one only once the judge starts it (or decides it)', () => {
+  const room = makeRoom();
+  const ids = room.state.meta.pg.comps.map((c) => c.id);
+  const shown = (pid) => derive({ ...room, pid }, T0 + 600 * MIN).pg.comps.map((c) => c.id);
+  assert.deepEqual(shown('anna0000'), ids, 'on show by default');
+  assert.equal(pgOf(room).compsOnShow, true);
+
+  // A player can't make them secret; the judge can.
+  room.add('anna0000', { t: 'pgvis', show: false });
+  assert.deepEqual(shown('anna0000'), ids);
+  room.add('judy0000', { t: 'pgvis', show: false });
+  assert.deepEqual(shown('anna0000'), [], 'secret: nothing to see yet');
+  assert.deepEqual(shown('judy0000'), ids, 'the judge sees them all');
+  assert.deepEqual(shown('host0000'), ids, 'and so does the host');
+  assert.deepEqual(pgOf(room).secretComps.map((c) => c.id), ids);
+
+  // The judge starts one: it shows (and is in the feed); a player's "start" doesn't count.
+  room.add('bo000000', { t: 'pgcomp', c: 'outfit' });
+  assert.deepEqual(shown('anna0000'), []);
+  const start = room.add('judy0000', { t: 'pgcomp', c: 'song' });
+  room.add('judy0000', { t: 'pgcomp', c: 'song' }); // started once — the first start counts
+  room.add('judy0000', { t: 'pgcomp', c: 'nope' });
+  let pg = pgOf(room);
+  assert.deepEqual(shown('anna0000'), ['song']);
+  assert.deepEqual([...pg.started.values()].map((s) => [s.comp, s.by, s.ts]), [['song', 'judy0000', start.ts]]);
+  assert.deepEqual(pg.feed.filter((f) => f.kind === 'pgcomp').map((f) => f.comp), ['song']);
+
+  // A podium shows a competition too (even one never started).
+  room.add('judy0000', { t: 'podium', c: 'spirit', places: ['t1'] });
+  assert.deepEqual(shown('anna0000'), ['song', 'spirit']);
+  assert.deepEqual(pgOf(room).secretComps.map((c) => c.id), ['photo', 'outfit']);
+
+  // On show again: everything is visible; starting still works (as an announcement).
+  room.add('judy0000', { t: 'pgvis', show: true });
+  assert.deepEqual(shown('anna0000'), ids);
+  room.add('judy0000', { t: 'pgcomp', c: 'photo' });
+  pg = pgOf(room);
+  assert.equal(pg.compsOnShow, true);
+  assert.deepEqual([...pg.started.keys()], ['song', 'photo']);
+  assert.deepEqual(pg.secretComps, []);
+});

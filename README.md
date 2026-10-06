@@ -173,6 +173,11 @@ og antallet af slurke er ens slag — som i golf vinder den laveste score.
   som standard; I kan tilføje jeres egne. Dommeren sætter 1.-, 2.- og 3.-pladsen, podiet popper op
   hos alle og står under *Konkurrencer*, og pladserne giver holdet bonusslag (3, 2 og 1 som
   standard, kan ændres).
+- **Hemmelige konkurrencer:** Dommeren vælger, om spillerne kan se konkurrencerne på forhånd
+  (kontakten øverst under *Konkurrencer*, eller *Hemmelige konkurrencer*, når runden oprettes). Er
+  de hemmelige, ser spillerne først en konkurrence, når dommeren trykker *Start* — så popper den op
+  på alles telefoner og storskærmen. Dommeren kan også starte konkurrencerne, når de ikke er
+  hemmelige, så alle får besked, når det går løs.
 - **Fotos:** Billederne fra kameraet i appen (se [Fotos fra aftenen](#fotos-fra-aftenen)) ligger
   også under *Fotos*, med holdets farve. Dommeren sætter fotokonkurrencens podie direkte fra et
   billede i fuld størrelse — eller under *Konkurrencer*.

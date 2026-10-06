@@ -154,6 +154,17 @@ export function setPodium(room, comp, places) {
   return room.append({ t: 'podium', c: comp.id, ...(comp.kind === 'photo' ? { photos: places } : { places }) });
 }
 
+// The judge starts a competition: it pops up on every phone (and, if the competitions are kept
+// secret, the players see it from now on).
+export function startCompetition(room, comp) {
+  return room.append({ t: 'pgcomp', c: comp.id });
+}
+
+// Whether the players see the competitions before the judge starts them.
+export function showCompetitions(room, show) {
+  return room.append({ t: 'pgvis', show: !!show });
+}
+
 export function drawChallenge(room, { c, text }) {
   return room.append({ t: 'chal', ...(text ? { text: String(text).trim().slice(0, 160) } : { c }) });
 }

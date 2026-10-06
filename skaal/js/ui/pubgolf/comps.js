@@ -1,9 +1,10 @@
 // The "Konkurrencer" tab: who won what (with podiums everyone can see), challenges along the way
-// and minigames for entertainment.
-import { html, useState, useEffect, Sheet, Button, Icon, cx } from '../kit.js';
+// and minigames for entertainment. The judge starts the competitions (they pop up on every phone)
+// and can keep them secret until then.
+import { html, useState, useEffect, Sheet, Button, Icon, Switch, cx } from '../kit.js';
 import { PhotoThumb } from '../photos/photo.js';
 import { GAMES, gameById } from '../../minigames/index.js';
-import { setPodium, startGame } from '../../app/actions.js';
+import { setPodium, startGame, startCompetition, showCompetitions } from '../../app/actions.js';
 import { getDerived } from '../../app/session.js';
 import { confirmDialog, toast } from '../ui-store.js';
 import { sfx } from '../feedback.js';
@@ -19,10 +20,23 @@ export function CompetitionsTab({ room, d }) {
   const [challenge, setChallenge] = useState(false);
   const decided = pg.comps.filter((c) => pg.results.get(c.id)?.places.some(Boolean)).length;
   const [b1, b2, b3] = pg.cfg.compBonus;
+  const judging = pg.isJudge && !d.ended;
+  const start = async (comp) => {
+    const secret = pg.secretComps.some((c) => c.id === comp.id);
+    const ok = await confirmDialog({
+      title: `${comp.emoji} Start ${comp.name}?`,
+      text: secret ? 'Konkurrencen bliver afsløret og popper op på alles telefoner.' : 'Konkurrencen popper op på alles telefoner.',
+      confirm: 'Start',
+    });
+    if (!ok) return;
+    startCompetition(room, comp);
+    sfx.whoosh();
+    toast(`🏁 ${comp.name} er startet`, { tone: 'good' });
+  };
   return html`<div class="stack stack--l">
     <div class="section__head" style=${{ paddingTop: '6px' }}>
       <h1 class="section__title" style=${{ fontSize: '26px' }}>Konkurrencer</h1>
-      <span class="faint" style=${{ fontSize: '13px' }}>${decided} af ${pg.comps.length} afgjort</span>
+      <span class="faint" style=${{ fontSize: '13px' }}>${pg.comps.length ? `${decided} af ${pg.comps.length} afgjort` : 'Afsløres undervejs'}</span>
     </div>
 
     ${d.inbox.length
@@ -31,10 +45,41 @@ export function CompetitionsTab({ room, d }) {
         </section>`
       : null}
 
+    ${judging
+      ? html`<div class="card option-card">
+          <${Switch}
+            label="Spillerne kan se konkurrencerne på forhånd"
+            hint=${pg.compsOnShow
+              ? 'Slå fra, så ser spillerne først en konkurrence, når du starter den — den popper op hos alle.'
+              : 'Hemmelige 🤫 Spillerne ser først en konkurrence, når du starter den — den popper op hos alle.'}
+            checked=${pg.compsOnShow}
+            onChange=${(on) => {
+              showCompetitions(room, on);
+              toast(on ? 'Spillerne kan nu se alle konkurrencerne' : 'Konkurrencerne er hemmelige, til du starter dem 🤫', { tone: 'good' });
+            }}
+          />
+        </div>`
+      : null}
+
     <div class="stack">
       ${pg.comps.map(
-        (comp) => html`<${CompCard} room=${room} key=${comp.id} d=${d} comp=${comp} result=${pg.results.get(comp.id)} canEdit=${pg.isJudge && !d.ended} onEdit=${() => setPodiumFor(comp.id)} />`,
+        (comp) => html`<${CompCard}
+          room=${room}
+          key=${comp.id}
+          d=${d}
+          comp=${comp}
+          result=${pg.results.get(comp.id)}
+          canEdit=${judging}
+          onEdit=${() => setPodiumFor(comp.id)}
+          onStart=${judging ? () => start(comp) : null}
+        />`,
       )}
+      ${!pg.isOfficial && pg.secretComps.length
+        ? html`<div class="card card--pad pg-comp-secret">
+            <span aria-hidden="true">🤫</span>
+            <span>Dommeren afslører konkurrencerne undervejs — de popper op, når de starter.</span>
+          </div>`
+        : null}
     </div>
     ${b1 || b2 || b3
       ? html`<p class="faint" style=${{ fontSize: '12.5px', textAlign: 'center' }}>
@@ -50,16 +95,23 @@ export function CompetitionsTab({ room, d }) {
   </div>`;
 }
 
-export function CompCard({ room, d, comp, result, canEdit, onEdit }) {
+export function CompCard({ room, d, comp, result, canEdit, onEdit, onStart }) {
   const pg = d.pg;
   const places = result?.places || [];
   const decided = places.some(Boolean);
-  return html`<section class=${cx('card pg-comp', decided && 'is-decided')}>
+  const started = pg.started.get(comp.id);
+  // Only the judge (and the host) see a secret competition.
+  const secret = pg.secretComps.some((c) => c.id === comp.id);
+  return html`<section class=${cx('card pg-comp', decided && 'is-decided', secret && 'is-secret')}>
     <div class="pg-comp__head">
       <span class="pg-comp__emoji" aria-hidden="true">${comp.emoji}</span>
-      <span class="pg-comp__title">${comp.name}${comp.kind === 'photo' ? html`<span class="pg-comp__tag">Foto</span>` : null}</span>
-      ${canEdit ? html`<button type="button" class="btn btn--secondary btn--sm" onClick=${onEdit}>${decided ? 'Ret podiet' : 'Sæt podiet'}</button>` : null}
+      <span class="pg-comp__title">
+        <span>${comp.name}</span>
+        ${comp.kind === 'photo' ? html`<span class="pg-comp__tag">Foto</span>` : null}
+        ${secret ? html`<span class="pg-comp__tag pg-comp__tag--secret">Hemmelig</span>` : null}
+      </span>
     </div>
+    ${!decided && started ? html`<p class="pg-comp__live"><span class="pg-comp__dot" aria-hidden="true"></span>I gang · startet ${fmtAgo(started.ts, d.t)}</p>` : null}
     ${decided
       ? html`<ol class="pg-places">
           ${places.map((pl, i) =>
@@ -73,7 +125,15 @@ export function CompCard({ room, d, comp, result, canEdit, onEdit }) {
               : null,
           )}
         </ol>`
-      : html`<p class="pg-comp__empty">${comp.kind === 'photo' ? 'Del jeres bedste billeder under Fotos — dommeren vælger podiet.' : 'Ikke afgjort endnu.'}</p>`}
+      : html`<p class="pg-comp__empty">
+          ${secret ? 'Spillerne ser den først, når du starter den. ' : ''}${comp.kind === 'photo' ? 'Del jeres bedste billeder under Fotos — dommeren vælger podiet.' : 'Ikke afgjort endnu.'}
+        </p>`}
+    ${canEdit
+      ? html`<div class="pg-comp__actions">
+          ${!decided && !started && onStart ? html`<${Button} size="sm" icon="play" onClick=${onStart}>Start<//>` : null}
+          <${Button} size="sm" variant="secondary" onClick=${onEdit}>${decided ? 'Ret podiet' : 'Sæt podiet'}<//>
+        </div>`
+      : null}
   </section>`;
 }
 

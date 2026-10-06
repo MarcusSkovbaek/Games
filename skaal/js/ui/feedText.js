@@ -99,6 +99,10 @@ export function FeedText({ d, item, emoji = false }) {
       return html`${emoji ? '📸 ' : ''}${who} delte et billede${item.photo.cap ? html`: <span class="feed-item__quote">“${item.photo.cap}”</span>` : null}`;
     case 'pgchal':
       return html`${emoji ? '🎲 ' : ''}Udfordring: ${item.text}`;
+    case 'pgcomp': {
+      const comp = d.pg?.cfg.comps.find((c) => c.id === item.comp);
+      return html`${emoji ? '🏁 ' : ''}Konkurrencen starter: ${B(`${comp?.emoji || '🏆'} ${comp?.name || 'Konkurrence'}`)}`;
+    }
     case 'tour': {
       const face = faceById(item.face);
       return html`${emoji ? '🚴 ' : ''}${who} har kørt ${item.n} etaper → ${B(face ? `${face.name}: ${face.title}` : 'Tour de France')}`;

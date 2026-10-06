@@ -574,8 +574,32 @@ const scenarios = {
     await wait(600);
     assert.deepEqual(await standings(bo), [['Hold Blå', -2], ['Hold Rød', -1]], 'photo podium: 3 strokes off for Anna’s team');
 
-    // Best outfit: Blå first, Rød second.
+    // The judge keeps the competitions secret: the players see one only when the judge starts it
+    // — then it pops up on every phone and the big screen. (A decided one stays visible.)
     await tab(host, 'Konkurrencer');
+    await host.page.locator('.switch-row', { hasText: 'Spillerne kan se konkurrencerne på forhånd' }).click();
+    await tab(sara, 'Konkurrencer');
+    await sara.page.waitForSelector('.pg-comp-secret', { timeout: 6000 });
+    assert.deepEqual(await sara.page.locator('.pg-comp__title').allTextContents(), ['FotokonkurrenceFoto'], 'only the decided photo competition');
+    assert.equal(await host.page.locator('.pg-comp.is-secret').count(), 3, 'the judge sees the secret ones');
+    assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'secret competitions: accessible');
+    assert.deepEqual(await axeViolations(host.page, axeSource), [], 'the judge’s competitions: accessible');
+    await shot(sara.page, 'e2e-pg-comps-secret');
+    await shot(host.page, 'e2e-pg-comps-judge');
+    await host.page.locator('.pg-comp', { hasText: 'Bedste holdsang' }).getByRole('button', { name: 'Start', exact: true }).click();
+    await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Start', exact: true }).click();
+    for (const ph of [anna, bo, sara, tv]) await ph.page.waitForSelector('.pg-moment', { timeout: 6000 });
+    assert.equal(await sara.page.locator('.pg-moment__text').textContent(), 'Bedste holdsang');
+    assert.equal(await host.page.locator('.pg-moment').count(), 0, 'no pop-up for the judge who started it');
+    assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'the competition pop-up is accessible');
+    await shot(sara.page, 'e2e-pg-comp-start');
+    await closeMoments([anna, bo, sara]);
+    await tv.page.locator('.pg-moment').click();
+    await sara.page.waitForSelector('.pg-comp:has-text("Bedste holdsang") .pg-comp__live', { timeout: 6000 });
+    assert.equal(await sara.page.locator('.pg-comp').count(), 2);
+    assert.equal(await derived(bo, (d) => d.pg.feed.filter((f) => f.kind === 'pgcomp').length), 1, 'the start is in the feed');
+
+    // Best outfit: Blå first, Rød second (deciding it shows it too).
     await host.page.locator('.pg-comp', { hasText: 'Bedste outfit' }).getByRole('button', { name: 'Sæt podiet' }).click();
     const rows = host.page.locator('.sheet.is-open .pg-podium-row');
     await rows.nth(0).locator('.team-chip', { hasText: 'Hold Blå' }).click();

@@ -1,5 +1,5 @@
-// Pub golf moments that pop up on every phone and the big screen: a new challenge, and a
-// competition podium the judge has just decided.
+// Pub golf moments that pop up on every phone and the big screen: a new challenge, a competition
+// the judge starts, and a competition podium the judge has just decided.
 import { html, useState, useEffect, useStore, Button, IconButton, cx } from '../kit.js';
 import * as storage from '../../core/storage.js';
 import { PG } from '../../game/pubgolf.js';
@@ -9,6 +9,7 @@ import { eventUi } from '../screens/event.js';
 import { TeamBadge, MEDALS, entrantName, entrantColor } from './common.js';
 import { CrownWinner } from './challenge.js';
 import { PhotoThumb } from '../photos/photo.js';
+import { canTakePhotos } from '../photos/layer.js';
 
 const isLive = (ts, t) => t - ts < PG.momentMs && ts - t < 120_000;
 
@@ -24,7 +25,7 @@ function useMoment({ room, d, tv, kind, items, waitFor, group = (x) => x.key }) 
   });
   const active = d.activeGame;
   // One moment at a time (also on the big screen); phones also wait for a running minigame.
-  const busy = (!tv && active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || (waitFor && ui[waitFor]);
+  const busy = (!tv && active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || [].concat(waitFor || []).some((k) => ui[k]);
   const fresh = (x) => !(group(x) in seen) || x.ts > seen[group(x)] + PG.momentMs;
   const item = d.ended || busy ? null : items.find((x) => fresh(x) && isLive(x.ts, d.t)) || null;
   const id = item ? group(item) : null;
@@ -96,10 +97,65 @@ function ChallengeMoment({ room, d, item, tv, onClose }) {
   </div>`;
 }
 
+// A competition starts. The judge who starts it knows (and gets a toast), so it pops up for
+// everyone else — with the competitions kept secret, this is when the players first see it.
+export function CompStartOverlay({ room, d, tv = false }) {
+  const items = [...d.pg.started.values()].filter((s) => tv || s.by !== room.pid).sort((a, b) => b.ts - a.ts);
+  const { item, close } = useMoment({ room, d, tv, kind: 'pgComp', items, waitFor: 'pgChal' });
+  if (!item) return null;
+  return html`<${CompStartMoment} key=${item.key} room=${room} d=${d} item=${item} tv=${tv} onClose=${close} />`;
+}
+
+function CompStartMoment({ room, d, item, tv, onClose }) {
+  const pg = d.pg;
+  const comp = pg.cfg.comps.find((c) => c.id === item.comp);
+  useOverlayMount(tv, () => sfx.fanfare());
+  const [b1, b2, b3] = pg.cfg.compBonus;
+  const photo = comp?.kind === 'photo';
+  const shoot = photo && !tv && canTakePhotos(room, d);
+  return html`<div class=${cx('overlay pg-moment', tv && 'pg-moment--tv')} style=${{ '--c': 'var(--gold)' }} role="dialog" aria-modal="true" aria-label=${`${comp?.name || 'Konkurrence'} starter`} onClick=${tv ? onClose : null}>
+    <div class="overlay__inner">
+      <div class="overlay__head">
+        <div class="overlay__titles">
+          <div class="overlay__kicker">Ny konkurrence · hul ${pg.current.n}</div>
+          <div class="overlay__title">Konkurrencen starter!</div>
+        </div>
+        ${tv ? null : html`<${IconButton} icon="x" label="Luk" onClick=${onClose} />`}
+      </div>
+      <div class="overlay__body pg-moment__body">
+        <div class="pg-moment__icon" aria-hidden="true">${comp?.emoji || '🏆'}</div>
+        <p class="pg-moment__text">${comp?.name || 'Konkurrence'}</p>
+        <p class="pg-moment__sub">
+          ${photo ? 'Tag jeres bedste billeder — dommeren vælger podiet.' : 'Dommeren afgør, hvem der vinder.'}
+          ${b1 || b2 || b3 ? ` Podiet giver ${b1}, ${b2} og ${b3} slag i bonus.` : ''}
+        </p>
+        ${tv
+          ? null
+          : html`<div class="pg-moment__actions">
+              ${shoot
+                ? html`<${Button}
+                    size="lg"
+                    block
+                    icon="camera"
+                    onClick=${() => {
+                      onClose();
+                      eventUi.set({ camera: true });
+                    }}
+                  >
+                    Tag et billede
+                  <//>`
+                : null}
+              <${Button} size="lg" block variant=${shoot ? 'secondary' : 'primary'} onClick=${onClose}>Vi er klar! 💪<//>
+            </div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
 // The judge who sets a podium already knows it (and gets a toast), so it pops up for everyone else.
 export function PodiumOverlay({ room, d, tv = false }) {
   const items = [...d.pg.results.values()].filter((r) => r.places.some(Boolean) && (tv || r.by !== room.pid)).sort((a, b) => b.ts - a.ts);
-  const { item, id, close } = useMoment({ room, d, tv, kind: 'pgPodium', items, waitFor: 'pgChal', group: (r) => r.comp });
+  const { item, id, close } = useMoment({ room, d, tv, kind: 'pgPodium', items, waitFor: ['pgChal', 'pgComp'], group: (r) => r.comp });
   if (!item) return null;
   return html`<${PodiumMoment} key=${id} room=${room} d=${d} result=${item} tv=${tv} onClose=${close} />`;
 }

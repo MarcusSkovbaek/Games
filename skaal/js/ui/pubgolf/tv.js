@@ -2,7 +2,7 @@
 // competition winners — plus challenges and podiums as they happen.
 import { html, Avatar, cx } from '../kit.js';
 import { ToPar, TeamBadge, PlayerAvatar, holeTitle, MEDALS, entrantName } from './common.js';
-import { ChallengeOverlay, PodiumOverlay } from './overlays.js';
+import { ChallengeOverlay, CompStartOverlay, PodiumOverlay } from './overlays.js';
 import { TvPhotos } from '../photos/tv.js';
 import { TvInvite } from '../tvInvite.js';
 
@@ -83,6 +83,7 @@ export function PgTv({ room, d, code }) {
 
     </aside>
     <${ChallengeOverlay} room=${room} d=${d} tv />
+    <${CompStartOverlay} room=${room} d=${d} tv />
     <${PodiumOverlay} room=${room} d=${d} tv />
   </div>`;
 }

@@ -48,6 +48,8 @@ function glyphFor(item) {
       return '📸';
     case 'pgchal':
       return '🎲';
+    case 'pgcomp':
+      return '🏁';
     default:
       return '✨';
   }

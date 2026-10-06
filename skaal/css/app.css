@@ -6489,11 +6489,17 @@ button.pg-edit__emoji {
   flex: 1;
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 18px;
+}
+
+.pg-comp__title > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .pg-comp__tag {
@@ -6512,6 +6518,56 @@ button.pg-edit__emoji {
   margin-top: 8px;
   font-size: 14px;
   color: var(--text-2);
+}
+
+/* A competition the players can't see yet (only the judge and host see it, dashed). */
+.pg-comp.is-secret {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.pg-comp__tag--secret {
+  background: rgba(168, 85, 247, 0.18);
+  color: #d4b3ff;
+}
+
+.pg-comp__live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.pg-comp__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 60%, transparent);
+  animation: pulse 1.8s infinite;
+}
+
+.pg-comp__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pg-comp-secret {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.pg-comp-secret > span:first-child {
+  font-size: 26px;
 }
 
 .pg-places {

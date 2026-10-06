@@ -8,6 +8,7 @@ import { CourseEditor, TeamsEditor, CompsEditor, RulesEditor } from '../pubgolf/
 import { randomCode, randomId } from '../../core/ids.js';
 import { now } from '../../core/clock.js';
 import { openEvent, rememberEvent } from '../../app/session.js';
+import { showCompetitions } from '../../app/actions.js';
 import { fmtPoints } from '../format.js';
 import { navigate } from '../router.js';
 import { toast } from '../ui-store.js';
@@ -49,6 +50,8 @@ export function Create() {
   const [name, setName] = useState('');
   const [settings, setSettings] = useState(defaultSettings());
   const [pg, setPg] = useState(defaultPg);
+  // Pub golf: the players only see a competition once the judge starts it.
+  const [secretComps, setSecretComps] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const update = (patch) => setSettings((s) => normalizeSettings({ ...s, ...patch }));
@@ -85,6 +88,7 @@ export function Create() {
         sched: withSchedule([], eventSettings, t),
         ...(golf ? { type: 'pubgolf', pg: normalizePg(pg), judges: [] } : {}),
       });
+      if (golf && secretComps) showCompetitions(room, false);
       navigate(`/e/${code}`);
     } catch (err) {
       console.error(err);
@@ -142,6 +146,14 @@ export function Create() {
             <div class="field">
               <span class="field__label">Konkurrencer</span>
               <${CompsEditor} comps=${pg.comps} onChange=${(comps) => updatePg({ comps })} />
+              <div class="card option-card">
+                <${Switch}
+                  label="Hemmelige konkurrencer"
+                  hint="Spillerne ser først en konkurrence, når dommeren starter den — så popper den op hos alle. Kan ændres undervejs."
+                  checked=${secretComps}
+                  onChange=${setSecretComps}
+                />
+              </div>
             </div>
             <div class="field">
               <span class="field__label">Regler</span>
