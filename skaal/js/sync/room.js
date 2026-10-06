@@ -8,7 +8,9 @@
 //   <root>/<roomId>/a/<name>     shared images (Tour faces and mask) — LWW on `v`
 //   <root>/<roomId>-t/<pid>/<name>  photo thumbnails  } raw encrypted JPEGs, outside the room's `#`
 //   <root>/<roomId>-f/<name>        full-size photos  } subscription: fetched one at a time when
-//                                                       someone looks at them (see Photos below)
+//   <root>/<roomId>-a/<pid>/<pv>    profile photos    } someone looks at them (see Photos below)
+//   <root>/<roomId>-r/<pid>/<name>  receipts: a tiny encrypted note next to each of those, which
+//                                   the phone they belong to watches to notice a broker lost one
 //
 // Every player only appends to their own log, so concurrent writes never conflict and every
 // device converges on the same state regardless of message order. Any device can "heal" a broker
@@ -54,6 +56,8 @@ export function cleanProfile(p) {
       typeof p.photo === 'string' && p.photo.length < MAX_PHOTO_CHARS && IMAGE_DATA.test(p.photo)
         ? p.photo
         : null,
+    // The full profile photo, when `photo` is only its tiny stand-in (see Profile photos below).
+    pv: typeof p.pv === 'string' && /^[0-9a-f]{12}$/.test(p.pv) ? p.pv : null,
     color: typeof p.color === 'string' && /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : null,
     joinedAt: Number(p.joinedAt) || 0,
     // Timestamp of leaving (0 = still here). Older payloads used `true`.
@@ -100,10 +104,14 @@ export class Room extends Emitter {
     this.base = `${SYNC.topicRoot}/${roomId}`;
     this.tbase = `${SYNC.topicRoot}/${roomId}-t`;
     this.fbase = `${SYNC.topicRoot}/${roomId}-f`;
+    this.abase = `${SYNC.topicRoot}/${roomId}-a`;
+    this.rbase = `${SYNC.topicRoot}/${roomId}-r`;
     // Photos this phone took and keeps a copy of, and (set by the photo store) where to get that
-    // copy: (name) => { thumb, full } as sealed bytes, or null.
+    // copy: (name) => { thumb, full } as sealed bytes, or null. Likewise our profile photo:
+    // (pv) => sealed bytes, or null.
     this.ownPhotos = new Set();
     this.photoSource = null;
+    this.avatarSource = null;
     this.persist = persist;
     this.WebSocketImpl = WebSocketImpl;
     this.state = { meta: null, players: {}, assets: {} };
@@ -146,8 +154,8 @@ export class Room extends Emitter {
       });
       client.setWill({ topic: this._topic('o', this.pid), payload: will, retain: true, qos: 0 });
       client.subscribe(`${this.base}/#`, 0);
-      // Only our own photos' thumbnails: a broker that lost one of them gets it back from us.
-      client.subscribe(`${this.tbase}/${this.pid}/+`, 0);
+      // The receipts for our own photos: a broker that lost one of them gets it back from us.
+      client.subscribe(`${this.rbase}/${this.pid}/+`, 0);
       b.client = client;
       client.start();
     }
@@ -274,14 +282,15 @@ export class Room extends Emitter {
   // A photo is two sealed JPEGs — a thumbnail and the full size — on topics outside the room's `#`
   // subscription, fetched one at a time when someone looks at them. A phone that reconnects (which
   // phones do all evening) therefore never downloads the evening's photos again. Only the phone
-  // that took a photo surely has it, so only that phone puts it back on a broker that lost it. It
-  // subscribes to its own thumbnails to notice: one missing from a broker means the broker lost it.
+  // that took a photo surely has it, so only that phone puts it back on a broker that lost it. To
+  // notice, it watches a tiny receipt it leaves next to each photo: no receipt, no photo.
 
   async publishPhoto(name, thumbBytes, fullBytes) {
     const thumb = await sealBytes(this.key, thumbBytes, `t/${name}`);
     const full = await sealBytes(this.key, fullBytes, `f/${name}`);
     this._publishRaw(`${this.tbase}/${this.pid}/${name}`, thumb);
     this._publishRaw(`${this.fbase}/${name}`, full);
+    this._publishRaw(`${this.rbase}/${this.pid}/${name}`, await this._receipt(name));
     this.ownPhotos.add(name);
     return { thumb, full };
   }
@@ -290,7 +299,12 @@ export class Room extends Emitter {
   clearPhoto(pid, name) {
     this._publishRaw(`${this.tbase}/${pid}/${name}`, new Uint8Array(0));
     this._publishRaw(`${this.fbase}/${name}`, new Uint8Array(0));
+    this._publishRaw(`${this.rbase}/${pid}/${name}`, new Uint8Array(0));
     if (pid === this.pid) this.ownPhotos.delete(name);
+  }
+
+  _receipt(name) {
+    return sealBytes(this.key, Uint8Array.of(1), `r/${name}`);
   }
 
   // The photos this phone keeps copies of (after a reload): heal them from now on.
@@ -299,11 +313,9 @@ export class Room extends Emitter {
     this.healNow();
   }
 
-  // True once a broker has our photo: it sent the thumbnail back and acknowledged the full size.
+  // True once a broker has our photo: the receipt sent after it has come back.
   photoSent(name) {
-    return this.brokers.some(
-      (b) => b.status === 'online' && b.client && b.seen.has(`t/${name}`) && !b.client.pending.has(`r:${this.fbase}/${name}`),
-    );
+    return this.brokers.some((b) => b.status === 'online' && b.client && b.seen.has(`r/${name}`) && !b.client.pending.has(`r:${this.fbase}/${name}`));
   }
 
   // { bytes, sealed } of a thumbnail (sealed: as on the broker, for keeping on this phone).
@@ -329,12 +341,51 @@ export class Room extends Emitter {
   async _healPhotos(b) {
     for (const name of this.ownPhotos) {
       if (b.status !== 'online') return;
-      if (b.seen.has(`t/${name}`)) continue;
-      const copy = await this.photoSource?.(name);
-      if (!copy?.thumb || b.status !== 'online') continue;
-      b.client?.publish(`${this.tbase}/${this.pid}/${name}`, copy.thumb, { qos: 1, retain: true });
-      if (copy.full) b.client?.publish(`${this.fbase}/${name}`, copy.full, { qos: 1, retain: true });
+      if (b.seen.has(`r/${name}`)) continue;
+      const receipt = await this._receipt(name);
+      // Photos from before receipts: often still there, and then the receipt is all that's missing.
+      const there = await b.client?.fetchRetained(`${this.tbase}/${this.pid}/${name}`);
+      if (b.status !== 'online') return;
+      if (!(there && (await unsealBytes(this.key, there, `t/${name}`)))) {
+        const copy = await this.photoSource?.(name);
+        if (!copy?.thumb || b.status !== 'online') continue;
+        b.client?.publish(`${this.tbase}/${this.pid}/${name}`, copy.thumb, { qos: 1, retain: true });
+        if (copy.full) b.client?.publish(`${this.fbase}/${name}`, copy.full, { qos: 1, retain: true });
+      }
+      b.client?.publish(`${this.rbase}/${this.pid}/${name}`, receipt, { qos: 1, retain: true });
     }
+    await this._healAvatar(b);
+  }
+
+  // ---------------------------------------------------------------------- profile photos
+  // A profile carries a tiny version of its photo and `pv`, which names the real one: a sealed
+  // JPEG on its own topic, fetched when an avatar is shown (and kept on the phone) — so a phone
+  // that reconnects doesn't download everyone's photo again. Healed like photos, by its owner.
+
+  async publishAvatar(pv, bytes) {
+    const sealed = await sealBytes(this.key, bytes, `a/${this.pid}/${pv}`);
+    this._publishRaw(`${this.abase}/${this.pid}/${pv}`, sealed);
+    this._publishRaw(`${this.rbase}/${this.pid}/av-${pv}`, await this._receipt(`av-${pv}`));
+    return sealed;
+  }
+
+  clearAvatar(pv, pid = this.pid) {
+    this._publishRaw(`${this.abase}/${pid}/${pv}`, new Uint8Array(0));
+    this._publishRaw(`${this.rbase}/${pid}/av-${pv}`, new Uint8Array(0));
+  }
+
+  // { bytes, sealed } of a player's profile photo.
+  fetchAvatar(pid, pv) {
+    return this._fetchSealed(`${this.abase}/${pid}/${pv}`, `a/${pid}/${pv}`);
+  }
+
+  async _healAvatar(b) {
+    const pv = this.state.players[this.pid]?.profile?.pv;
+    if (!pv || b.seen.has(`r/av-${pv}`) || b.status !== 'online') return;
+    const sealed = await this.avatarSource?.(pv);
+    if (!sealed || b.status !== 'online') return;
+    b.client?.publish(`${this.abase}/${this.pid}/${pv}`, sealed, { qos: 1, retain: true });
+    b.client?.publish(`${this.rbase}/${this.pid}/av-${pv}`, await this._receipt(`av-${pv}`), { qos: 1, retain: true });
   }
 
   // Every photo in the logs, as [pid, name] (for deleting the event).
@@ -350,8 +401,9 @@ export class Room extends Emitter {
   async destroy() {
     this.setMeta({ deleted: true });
     await new Promise((r) => setTimeout(r, 1200));
-    for (const pid of Object.keys(this.state.players)) {
+    for (const [pid, p] of Object.entries(this.state.players)) {
       for (const kind of ['i', 'l', 'o']) this._publishRaw(this._topic(kind, pid), new Uint8Array(0));
+      if (p.profile?.pv) this.clearAvatar(p.profile.pv, pid);
     }
     for (const name of Object.keys(this.state.assets)) this._publishRaw(`${this.base}/a/${name}`, new Uint8Array(0));
     for (const [pid, name] of this._photoTopics()) this.clearPhoto(pid, name);
@@ -500,11 +552,11 @@ export class Room extends Emitter {
   }
 
   async _onMessage(b, topic, payload) {
-    if (topic.startsWith(`${this.tbase}/${this.pid}/`)) {
-      // One of our own thumbnails (it counts only if it really is ours, encrypted with our key).
-      const name = topic.slice(this.tbase.length + this.pid.length + 2);
-      if (payload.length && (await unsealBytes(this.key, payload, `t/${name}`))) b.seen.set(`t/${name}`, true);
-      else b.seen.delete(`t/${name}`);
+    if (topic.startsWith(`${this.rbase}/${this.pid}/`)) {
+      // A receipt for one of our photos (it counts only if it really is ours, sealed with our key).
+      const name = topic.slice(this.rbase.length + this.pid.length + 2);
+      if (payload.length && (await unsealBytes(this.key, payload, `r/${name}`))) b.seen.set(`r/${name}`, true);
+      else b.seen.delete(`r/${name}`);
       return;
     }
     if (!topic.startsWith(`${this.base}/`)) return;

@@ -257,3 +257,71 @@ test('photos: fetched on demand (not with every reconnect), healed by the phone 
     await broker.close();
   }
 });
+
+test('profile photos: a small profile, the photo on its own topic — fetched on demand, healed by its owner, wiped', async () => {
+  let broker = await startBroker();
+  const port = broker.port;
+  const brokers = [{ id: 'local', url: broker.url }];
+  const code = 'K7F2QXRM8HJP';
+  const anna = await makeRoom(code, 'annapid01', brokers);
+  const bo = await makeRoom(code, 'bopid0001', brokers);
+  try {
+    await until(() => anna.status.online === 1 && bo.status.online === 1, 6000, 'online');
+    const pv = 'abcdef012345';
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, ...new Array(30_000).fill(5)]);
+    const sealed = await anna.publishAvatar(pv, jpeg);
+    anna.avatarSource = async (v) => (v === pv ? sealed : null);
+    anna.setProfile({ name: 'Anna', photo: 'data:image/jpeg;base64,/9j/AAAA', pv });
+    await until(() => bo.state.players.annapid01?.profile?.pv === pv, 6000, 'Bo has Anna’s profile');
+    assert.equal(bo.state.players.annapid01.profile.photo, 'data:image/jpeg;base64,/9j/AAAA', 'the tiny stand-in travels with the profile');
+    assert.deepEqual((await bo.fetchAvatar('annapid01', pv)).bytes, jpeg);
+    assert.equal(await bo.fetchAvatar('annapid01', 'ffffffffffff'), null, 'no such photo');
+    assert.equal(await bo.fetchAvatar('bopid0001', pv), null, 'a photo is bound to its owner');
+
+    // The broker loses everything while Anna is away; back online, her phone puts the photo back.
+    anna.stop();
+    await wait(300);
+    await broker.close();
+    broker = await startBroker({ port });
+    await until(() => bo.status.online === 1, 15000, 'Bo reconnected');
+    await wait(SYNC.settleMs + 500);
+    assert.equal(await bo.fetchAvatar('annapid01', pv), null, 'lost with the broker');
+    await anna.start();
+    await until(async () => (await bo.fetchAvatar('annapid01', pv))?.bytes.length === jpeg.length, 10000, 'healed by Anna');
+
+    // A new photo: the old one is wiped.
+    anna.clearAvatar(pv);
+    await until(async () => !(await bo.fetchAvatar('annapid01', pv)), 6000, 'wiped');
+  } finally {
+    await wait(200);
+    await broker.close();
+  }
+});
+
+test('a phone checks its own photos on the brokers through tiny receipts, not by downloading them again', async () => {
+  const broker = await startBroker();
+  const brokers = [{ id: 'local', url: broker.url }];
+  const code = 'K7F2QXRM8HJP';
+  const anna = await makeRoom(code, 'annapid01', brokers);
+  try {
+    await until(() => anna.status.online === 1, 6000, 'online');
+    const names = Array.from({ length: 6 }, (_, i) => `ph-annapid01-abc12${i}`);
+    for (const name of names) await anna.publishPhoto(name, Uint8Array.from([0xff, 0xd8, 0xff, ...new Array(20_000).fill(1)]), new Uint8Array(100_000).fill(2));
+    await until(() => names.every((n) => anna.photoSent(n)), 6000, 'all sent');
+    // Reconnect and count what comes back on the receipts subscription.
+    let bytes = 0;
+    const client = anna.brokers[0].client;
+    const onMessage = client.onMessage;
+    client.onMessage = (topic, payload, meta) => {
+      if (!topic.startsWith(`${anna.base}/`)) bytes += payload.length;
+      return onMessage(topic, payload, meta);
+    };
+    broker.dropClients();
+    await until(() => anna.status.online === 0, 6000, 'dropped');
+    await until(() => anna.status.online === 1 && names.every((n) => anna.photoSent(n)), 15000, 'back, receipts seen');
+    assert.ok(bytes < 1000, `receipts only: ${bytes} bytes for ${names.length} photos`);
+  } finally {
+    await wait(200);
+    await broker.close();
+  }
+});

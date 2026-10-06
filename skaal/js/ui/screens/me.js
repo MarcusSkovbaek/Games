@@ -5,6 +5,7 @@ import { fmtPoints, fmtDecimal, fmtClock, fmtAgo } from '../format.js';
 import { undo, setPaused, endEvent, reopenEvent, leaveEvent } from '../../app/actions.js';
 import { forgetEvent } from '../../app/session.js';
 import { forgetPhotos } from '../../app/photos.js';
+import { saveProfile, avatarUrl, forgetAvatars } from '../../app/avatars.js';
 import { PhotoHostSection } from '../photos/host.js';
 import { prefs, confirmDialog, toast } from '../ui-store.js';
 import { navigate, tvLink } from '../router.js';
@@ -68,6 +69,7 @@ export function MeTab({ room, d }) {
     await room.destroy();
     forgetEvent(room.code);
     forgetPhotos(room.roomId);
+    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
     navigate('/');
   };
 
@@ -82,6 +84,7 @@ export function MeTab({ room, d }) {
     leaveEvent(room);
     forgetEvent(room.code);
     forgetPhotos(room.roomId);
+    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
     navigate('/');
   };
 
@@ -212,10 +215,10 @@ export function MeTab({ room, d }) {
       ${editing
         ? html`<${ProfileForm}
             initialName=${me.name}
-            initialPhoto=${me.photo}
+            initialPhoto=${avatarUrl(me) || me.photo}
             submitLabel="Gem"
             onSubmit=${({ name, photo }) => {
-              room.setProfile({ name, photo });
+              saveProfile(room, { name, photo });
               setEditing(false);
               toast('Profil opdateret ✨', { tone: 'good' });
             }}

@@ -47,6 +47,14 @@ const scenarios = {
     const { host, anna, bo, sara, all } = await party(env);
     assert.equal(await derived(sara, (d) => d.players.size), 4, 'everyone sees four players');
     assert.ok(await derived(sara, (d) => !!d.players.get(d.ranking.find((p) => p.name === 'Mads').pid).photo), 'photos sync');
+    // The profile carries a tiny stand-in; the real photo is fetched for the avatar on its own,
+    // and painted as a background (nothing to save).
+    const mads = await derived(sara, (d) => d.ranking.find((p) => p.name === 'Mads'));
+    assert.ok(mads.photo.length < 5000 && /^[0-9a-f]{12}$/.test(mads.pv), `small profile (${mads.photo.length} chars), photo named ${mads.pv}`);
+    await tab(sara, 'Stilling');
+    await sara.page.waitForFunction(() => [...document.querySelectorAll('.avatar__img')].filter((el) => el.style.backgroundImage.includes('blob:')).length >= 3, null, { timeout: 10000 });
+    assert.equal(await sara.page.locator('.avatar img').count(), 0);
+    await tab(sara, 'Drik');
 
     await logDrink(anna, 'Øl', 2);
     await logDrink(bo, 'Shot', 1);

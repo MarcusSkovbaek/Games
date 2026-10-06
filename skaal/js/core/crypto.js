@@ -34,6 +34,11 @@ async function sha256(bytes) {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
 }
 
+// SHA-256 of some bytes, as hex (e.g. to name a picture after its content).
+export async function digestHex(bytes) {
+  return hex(await sha256(bytes));
+}
+
 const join = (label, bytes) => {
   const head = te.encode(label);
   const out = new Uint8Array(head.length + bytes.length);

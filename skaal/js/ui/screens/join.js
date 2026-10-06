@@ -7,6 +7,7 @@ import { navigate } from '../router.js';
 import { fmtPoints, plural } from '../format.js';
 import { pickPlayerColor } from '../../game/derive.js';
 import { setTeam } from '../../app/actions.js';
+import { saveProfile } from '../../app/avatars.js';
 import { TeamChip } from '../pubgolf/common.js';
 
 // Step 1: type the code.
@@ -69,9 +70,9 @@ export function JoinProfile({ room, d }) {
   // Suggest the team with the fewest players.
   const [team, setTeamChoice] = useState(() => [...teams].sort((a, b) => a.members.length - b.members.length)[0]?.id || null);
 
-  const submit = ({ name, photo }) => {
+  const submit = async ({ name, photo }) => {
     setBusy(true);
-    room.setProfile({ name, photo, joinedAt: now(), left: 0, color: room.me?.profile?.color || pickPlayerColor(room) });
+    await saveProfile(room, { name, photo, joinedAt: now(), left: 0, color: room.me?.profile?.color || pickPlayerColor(room) });
     if (team && !pg.players.get(room.pid)?.team) setTeam(room, room.pid, team);
     rememberEvent(room.code, { name: meta.name, host: isHost, type: meta.type || 'party' });
   };

@@ -131,12 +131,14 @@ sekunder) til gruppebilleder. Skriv en tekst, hvis du vil, og tryk *Del med alle
   i telefonens kamerarulle, og GPS-position og andre metadata fjernes, før billedet deles. (Ingen
   app kan forhindre skærmbilleder — men ingen kan hente billedet ud af appen.)
 - **Hurtigt og sparsomt:** Hvert billede ligger som en lille miniature og en udgave i fuld
-  størrelse, som telefonerne først henter, når billedet kommer frem på skærmen. Miniaturer, der er
-  hentet én gang, gemmes (krypteret) på telefonen. Så når en telefon vågner og forbinder igen —
-  hvad telefoner gør hele aftenen — skal den ikke hente aftenens billeder igen: Med 80 billeder
-  koster en genforbindelse omkring 1 MB i stedet for 8 MB.
+  størrelse, som telefonerne først henter, når billedet kommer frem på skærmen — og det samme
+  gælder profilbillederne. Billeder, der er hentet én gang, gemmes (krypteret) på telefonen. Så
+  når en telefon vågner og forbinder igen — hvad telefoner gør hele aftenen — skal den ikke hente
+  aftenens billeder igen: Med 20 gæster og 80 billeder koster en genforbindelse omkring 250 KB i
+  stedet for flere MB.
 - **Gemt sikkert:** Billederne ligger på flere servere på én gang. Mister en server dem, lægger
-  telefonen, der tog billedet, dem tilbage (den gemmer sin egen kopi — også krypteret).
+  telefonen, der tog billedet, dem tilbage (den gemmer sin egen kopi — også krypteret). Den holder
+  øje med en lille krypteret kvittering ved hvert billede i stedet for at hente billederne igen.
   *Slet eventet* fjerner alle billeder fra serverne, og *Forlad eventet* fjerner telefonens egne
   kopier.
 

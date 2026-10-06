@@ -8,6 +8,7 @@ import { randomId } from '../core/ids.js';
 import { now } from '../core/clock.js';
 import { derive } from '../game/derive.js';
 import { clearPhotoCache } from './photos.js';
+import { bindAvatars, clearAvatars } from './avatars.js';
 
 export const session = createStore({ code: null, room: null, status: 'idle', version: 0, sync: null });
 
@@ -70,6 +71,7 @@ export async function openEvent(code) {
     }
     current = { code, room, off };
     opening = null;
+    bindAvatars(room);
     session.set({ room, status: 'ready', version: room.version, sync: room.status });
     await room.start();
     return room;
@@ -85,6 +87,7 @@ export function closeEvent() {
   current.room.stop();
   current = null;
   clearPhotoCache();
+  clearAvatars();
   session.set({ code: null, room: null, status: 'idle', sync: null });
 }
 

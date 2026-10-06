@@ -3,6 +3,7 @@ import { html, useState, useStore, Avatar, Icon, IconButton, Sheet, Switch } fro
 import { setPaused, endEvent, reopenEvent, leaveEvent, appointJudge, shuffleTeams } from '../../app/actions.js';
 import { forgetEvent, session } from '../../app/session.js';
 import { forgetPhotos } from '../../app/photos.js';
+import { saveProfile, avatarUrl, forgetAvatars } from '../../app/avatars.js';
 import { PhotoHostSection } from '../photos/host.js';
 import { prefs, confirmDialog, toast } from '../ui-store.js';
 import { navigate, tvLink } from '../router.js';
@@ -50,6 +51,7 @@ export function PgMeTab({ room, d }) {
     await room.destroy();
     forgetEvent(room.code);
     forgetPhotos(room.roomId);
+    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
     navigate('/');
   };
   const leave = async () => {
@@ -58,6 +60,7 @@ export function PgMeTab({ room, d }) {
     leaveEvent(room);
     forgetEvent(room.code);
     forgetPhotos(room.roomId);
+    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
     navigate('/');
   };
   const shuffle = async () => {
@@ -210,10 +213,10 @@ export function PgMeTab({ room, d }) {
       ${editing
         ? html`<${ProfileForm}
             initialName=${me.name}
-            initialPhoto=${me.photo}
+            initialPhoto=${avatarUrl(me) || me.photo}
             submitLabel="Gem"
             onSubmit=${({ name, photo }) => {
-              room.setProfile({ name, photo });
+              saveProfile(room, { name, photo });
               setEditing(false);
               toast('Profil opdateret ✨', { tone: 'good' });
             }}

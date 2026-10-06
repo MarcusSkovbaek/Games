@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, use
 import htm from '../vendor/htm.mjs';
 import { ICONS } from './icons.js';
 import { now } from '../core/clock.js';
+import { avatarUrl, loadAvatar } from '../app/avatars.js';
 
 export const html = htm.bind(h);
 export { h, render, Fragment, useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, useReducer, useErrorBoundary };
@@ -90,14 +91,35 @@ export function initials(name = '') {
   return (first + second).toUpperCase();
 }
 
+// A player's profile photo: the tiny stand-in from the profile until the real one is loaded (see
+// app/avatars.js).
+function useAvatarSrc(player) {
+  const [, force] = useReducer((x) => x + 1, 0);
+  const sharp = avatarUrl(player);
+  const key = player?.pv ? `${player.pid}:${player.pv}` : null;
+  useEffect(() => {
+    if (!key || sharp) return undefined;
+    let live = true;
+    loadAvatar(player).then((url) => live && url && force());
+    return () => {
+      live = false;
+    };
+  }, [key, !!sharp]);
+  return sharp || player?.photo || null;
+}
+
+const noSave = (e) => e.preventDefault();
+
 export function Avatar({ player, size = 44, online, ring, class: className, badge }) {
   const style = { '--av': `${size}px`, '--av-color': player?.color || '#8B5CF6' };
   const jersey = !!player?.jersey;
+  const src = useAvatarSrc(player);
+  // Painted as a background (like the photos), so there is no image to save or drag out.
   return html`<span class=${cx('avatar', ring && 'avatar--ring', jersey && 'avatar--jersey', className)} style=${style} title=${jersey ? 'Gul trøje — fører Touren' : null}>
-    ${player?.photo
-      ? html`<img src=${player.photo} alt="" loading="lazy" decoding="async" draggable="false" />`
+    ${src
+      ? html`<span class="avatar__img" style=${{ backgroundImage: `url("${src}")` }} onContextMenu=${noSave} onDragStart=${noSave}></span>`
       : html`<span class="avatar__initials">${initials(player?.name)}</span>`}
-    ${jersey ? html`<${LeaderMask} src=${player.mask} glasses=${!!player.photo} />` : null}
+    ${jersey ? html`<${LeaderMask} src=${player.mask} glasses=${!!src} />` : null}
     ${online ? html`<span class="avatar__dot" role="img" aria-label="Online"></span>` : null}
     ${badge ? html`<span class="avatar__badge">${badge}</span>` : null}
   </span>`;

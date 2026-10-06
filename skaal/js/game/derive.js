@@ -46,6 +46,7 @@ export function derive(room, t) {
       pid,
       name: prof.name,
       photo: prof.photo,
+      pv: prof.pv || null,
       color: prof.color || colorFor(pid),
       joinedAt: prof.joinedAt || 0,
       left: prof.left || 0,
