@@ -6,6 +6,7 @@ import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
 import { CameraOverlay } from './camera.js';
 import { PhotoViewer } from './photo.js';
+import { openComments } from './comments.js';
 
 // Photos need an event with a long code (see core/crypto.js) — and the host's blessing.
 export const canTakePhotos = (room, d) => !!room.strong && d.settings.photos !== false;
@@ -27,9 +28,36 @@ export function PhotoLayer({ room, d, extra }) {
     announced.current = newest.ts;
     if (d.t - newest.ts > 60_000) return; // an older photo arriving late
     const name = d.players.get(newest.pid)?.name || 'En gæst';
-    toast(`📸 ${name} delte et billede`, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key, show: false }) } });
+    toast(`📸 ${name} delte et billede`, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key, show: false, comments: false }) } });
   }, [newest?.key]);
+
+  // Someone comments on one of our photos (unless we are reading that photo's comments).
+  const heard = latestCommentToMe(room, d);
+  const told = useRef(heard?.ts || 0);
+  useEffect(() => {
+    if (!heard || heard.ts <= told.current) return;
+    told.current = heard.ts;
+    if (d.t - heard.ts > 60_000) return;
+    const ui = eventUi.get();
+    if (ui.photo === heard.photo && ui.comments) return;
+    const name = d.players.get(heard.pid)?.name || 'En gæst';
+    const photo = d.photoByKey.get(heard.photo);
+    toast(`💬 ${name}: “${heard.txt.length > 60 ? `${heard.txt.slice(0, 58)}…` : heard.txt}”`, {
+      key: 'comment',
+      duration: 5000,
+      action: { label: 'Svar', onClick: () => openComments(photo, 'write') },
+    });
+  }, [heard?.key]);
   return html`<${CameraOverlay} room=${room} /><${PhotoViewer} room=${room} d=${d} extra=${extra} />`;
+}
+
+function latestCommentToMe(room, d) {
+  let latest = null;
+  for (const ph of d.photos) {
+    if (ph.pid !== room.pid) continue;
+    for (const c of d.comments.get(ph.key) || []) if (c.pid !== room.pid && (!latest || c.ts > latest.ts)) latest = c;
+  }
+  return latest;
 }
 
 export function CameraButton({ room, d }) {

@@ -130,3 +130,43 @@ test('photos with their own thumbnail topic: no shared image needed; deleted or 
   assert.deepEqual([...d.photosGone].sort(), [a.name, b.name].sort());
   assert.equal(c.name, d.photos[0].asset);
 });
+
+test('comments: oldest first under each photo; your own can be deleted, the host can hide any', () => {
+  const room = makeParty();
+  const photo = room.photo('anna0000', 'Skål');
+  const key = `anna0000:${photo.entry.id}`;
+  const one = room.add('bo000000', { t: 'pc', k: key, txt: '  Haha, se Cara!  ' });
+  room.add('cara0000', { t: 'pc', k: key, txt: 'Slet det 😂' });
+  room.add('anna0000', { t: 'pc', k: key, txt: 'x'.repeat(500) });
+  room.add('bo000000', { t: 'pc', k: key, txt: '   ' }); // empty
+  room.add('bo000000', { t: 'pc', k: 'anna0000:nope', txt: 'intet billede' });
+  room.add('bo000000', { t: 'pc', txt: 'ingen nøgle' });
+  let d = at(room, 'cara0000');
+  assert.deepEqual(
+    d.comments.get(key).map((c) => [c.pid, c.txt.length > 20 ? c.txt.length : c.txt]),
+    [
+      ['bo000000', 'Haha, se Cara!'],
+      ['cara0000', 'Slet det 😂'],
+      ['anna0000', 200],
+    ],
+  );
+  assert.equal(d.comments.size, 1);
+  assert.equal(d.comments.get(key)[0].key, `bo000000:${one.id}`);
+
+  // Bo deletes his own; Cara can't hide Anna's, the host can.
+  room.add('bo000000', { t: 'x', r: one.id });
+  const annas = d.comments.get(key)[2].key;
+  room.add('cara0000', { t: 'phide', k: annas });
+  d = at(room);
+  assert.deepEqual(d.comments.get(key).map((c) => c.pid), ['cara0000', 'anna0000']);
+  room.add('host0000', { t: 'phide', k: annas });
+  d = at(room);
+  assert.deepEqual(d.comments.get(key).map((c) => c.pid), ['cara0000']);
+
+  // Comments keep coming after the end — and go with the photo when it is deleted.
+  room.state.meta.ended = T0 + 10 * MIN;
+  room.add('bo000000', { t: 'pc', k: key, txt: 'Dagen derpå' }).ts = T0 + 60 * MIN;
+  assert.deepEqual(at(room).comments.get(key).map((c) => c.txt), ['Slet det 😂', 'Dagen derpå']);
+  room.add('anna0000', { t: 'x', r: photo.entry.id });
+  assert.equal(at(room).comments.size, 0);
+});

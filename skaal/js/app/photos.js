@@ -12,7 +12,7 @@
 import { randomId } from '../core/ids.js';
 import { getFile, putFile, deleteFile } from '../core/files.js';
 import { seal, unseal, unsealBytes } from '../core/crypto.js';
-import { photoPrefix } from '../game/photos.js';
+import { photoPrefix, COMMENT_MAX } from '../game/photos.js';
 
 export const PHOTO = {
   fullEdge: 1600, // longest side of the full-size photo
@@ -122,6 +122,16 @@ export async function sharePhoto(room, prepared, caption = '') {
 // dropGoneCopies).
 export function removePhoto(room, photo) {
   removePhotos(room, [photo]);
+}
+
+export function commentPhoto(room, photo, text) {
+  const txt = String(text || '').trim().slice(0, COMMENT_MAX);
+  return txt ? room.append({ t: 'pc', k: photo.key, txt }) : null;
+}
+
+// Your own comment is deleted; the host (or the judge) hides someone else's.
+export function removeComment(room, comment) {
+  room.append(comment.pid === room.pid ? { t: 'x', r: comment.id } : { t: 'phide', k: comment.key });
 }
 
 // The host clears every photo of the event at once (e.g. the morning after).

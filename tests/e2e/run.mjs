@@ -739,6 +739,33 @@ const scenarios = {
     await bo.page.keyboard.press('0');
     await bo.page.waitForSelector('.viewer__stage:not(.is-zoomed)');
     await bo.page.locator('.viewer__like').click();
+    // Comments: Bo writes one (the arrow keys move the cursor, not the photo) …
+    await bo.page.getByRole('button', { name: 'Skriv en kommentar' }).click();
+    await bo.page.waitForSelector('.viewer__comments');
+    await bo.page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Skriv en kommentar'); // the cursor is in the text field
+    await bo.page.keyboard.type('Haha, fedt billede!');
+    await bo.page.keyboard.press('ArrowLeft');
+    await bo.page.keyboard.press('Enter');
+    await bo.page.waitForFunction(() => document.querySelector('.viewer__clist')?.textContent.includes('Haha, fedt billede!'));
+    assert.match(await bo.page.locator('.vcomment').first().textContent(), /Anna\s*Skål fra baren! 🍻/, 'the caption comes first');
+    assert.equal(await bo.page.locator('.viewer__cform input').inputValue(), '');
+    assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'the comments are accessible');
+    await shot(bo.page, 'e2e-comments');
+    // … Anna, who took the photo, hears about it and answers from the heads-up.
+    await anna.page.locator('.toast', { hasText: 'Bo: “Haha, fedt billede!”' }).getByRole('button', { name: 'Svar' }).click();
+    await anna.page.waitForSelector('.viewer__comments');
+    await anna.page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Skriv en kommentar');
+    await anna.page.keyboard.type('Tak! 🍻');
+    await anna.page.getByRole('button', { name: 'Send kommentar' }).click();
+    await bo.page.waitForFunction(() => document.querySelector('.viewer__clist')?.textContent.includes('Tak! 🍻'));
+    await tv.page.waitForFunction(() => document.querySelector('.tv-photo__text small')?.textContent.includes('Anna Tak! 🍻'), null, { timeout: 8000 });
+    // Escape closes the comments first, then the photo.
+    await anna.page.keyboard.press('Escape');
+    await anna.page.waitForSelector('.viewer__comments', { state: 'detached' });
+    assert.equal(await anna.page.locator('.viewer').count(), 1);
+    assert.match(await anna.page.locator('.viewer__bar').textContent(), /2\s*kommentarer/);
+    await anna.page.keyboard.press('Escape');
+    await anna.page.waitForSelector('.viewer', { state: 'detached' });
     await bo.page.getByRole('button', { name: 'Luk', exact: true }).click();
     await bo.page.waitForSelector('.viewer', { state: 'detached' });
 
@@ -750,8 +777,26 @@ const scenarios = {
     assert.equal(await host.page.locator('.feed-item').first().locator('.feed-photo').count(), 1, 'the newest item is the photo');
     await host.page.waitForFunction(() => getComputedStyle(document.querySelector('.feed-photo .photo-frame')).backgroundImage.includes('blob:'), null, { timeout: 10000 });
     assert.match(await host.page.locator('.feed-item').first().locator('.react').first().textContent(), /❤️ 1/, 'Bo’s like shows in the feed too');
+    assert.match(await host.page.locator('.feed-comments').textContent(), /Bo\s*Haha, fedt billede!.*Anna\s*Tak! 🍻/s, 'the comments show under the photo');
     assert.deepEqual(await axeViolations(host.page, axeSource), [], 'the feed with photos is accessible');
     await shot(host.page, 'e2e-feed-photo');
+    // The host can hide anyone's comment; Anna deletes her own.
+    await host.page.getByRole('button', { name: 'Kommentarer: 2' }).click();
+    await host.page.waitForSelector('.viewer__comments');
+    assert.notEqual(await host.page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Skriv en kommentar', 'reading does not pop up the keyboard');
+    await host.page.getByRole('button', { name: 'Skjul kommentaren fra Bo' }).click();
+    await bo.page.waitForFunction(() => window.__skaal.derived().comments.values().next().value?.length === 1, null, { timeout: 8000 });
+    assert.equal(await host.page.getByRole('button', { name: 'Slet din kommentar' }).count(), 0);
+    await host.page.keyboard.press('Escape');
+    await host.page.keyboard.press('Escape');
+    await host.page.waitForSelector('.viewer', { state: 'detached' });
+    await tab(anna, 'Feed');
+    await anna.page.getByRole('button', { name: 'Kommentarer: 1' }).click();
+    await anna.page.getByRole('button', { name: 'Slet din kommentar' }).click();
+    await host.page.waitForSelector('.feed-comments', { state: 'detached', timeout: 8000 });
+    await anna.page.keyboard.press('Escape');
+    await anna.page.keyboard.press('Escape');
+    await anna.page.waitForSelector('.viewer', { state: 'detached' });
 
     // The big screen shows it too, full size.
     await tv.page.waitForFunction(() => getComputedStyle(document.querySelector('.tv-photo__img') || document.body).backgroundImage.includes('blob:'), null, { timeout: 10000 });

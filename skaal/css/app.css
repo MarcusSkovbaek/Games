@@ -7614,6 +7614,7 @@ button.pg-edit__emoji {
 }
 
 .viewer__like,
+.viewer__talk,
 .viewer__action {
   display: inline-flex;
   align-items: center;
@@ -7657,6 +7658,160 @@ button.pg-edit__emoji {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Comments: a panel in the viewer, in place of its bottom bar */
+.viewer__comments {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  max-height: min(58%, 520px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px 20px 0 0;
+  background: #151517;
+  animation: comments-in 0.25s var(--ease);
+}
+
+@keyframes comments-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+.viewer__chead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 2px 16px;
+}
+
+.viewer__chead h2 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.viewer__chead h2 span {
+  margin-left: 2px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.viewer__chead .icon-btn {
+  color: #fff;
+}
+
+.viewer__clist {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 6px 16px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vcomment {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.vcomment__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.vcomment__body p {
+  font-size: 14.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.vcomment__body strong {
+  margin-right: 3px;
+}
+
+.vcomment__body small {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.vcomment__remove {
+  padding: 4px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.viewer__cempty {
+  padding: 4px 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.viewer__cform {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px calc(var(--safe-bottom) + 10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 16px or more, so phones don't zoom in on the field. */
+.viewer__cform .input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 16px;
+}
+
+.viewer__send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #1b1405;
+  transition: opacity 0.2s var(--ease);
+}
+
+.viewer__send:disabled {
+  opacity: 0.35;
+}
+
+/* Under a photo in the feed: the newest comments */
+.feed-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.feed-comments p {
+  overflow-wrap: anywhere;
+}
+
+.feed-comments strong {
+  margin-right: 3px;
+  color: var(--text);
+}
+
+.feed-comments__all {
+  align-self: flex-start;
+  padding: 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
 }
 
 /* Slideshow on the phone: a bar that fills while each photo is shown */
@@ -7804,6 +7959,24 @@ button.pg-edit__emoji {
   padding: 30px 16px 14px;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
   font-size: 17px;
+}
+
+.tv-photo__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* The newest comment on the photo, under the caption. */
+.tv-photo__text small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+  animation: fade-in 0.6s var(--ease);
 }
 
 .photo-pending {

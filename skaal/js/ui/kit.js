@@ -312,7 +312,8 @@ export function useModalFocus(ref, active = true) {
     const el = ref.current;
     if (!active || !el) return undefined;
     const before = document.activeElement;
-    (el.querySelector('[data-autofocus]') || el).focus({ preventScroll: true });
+    // (Unless something inside, such as a text field, already took the focus.)
+    if (!el.contains(document.activeElement)) (el.querySelector('[data-autofocus]') || el).focus({ preventScroll: true });
     const onKey = (e) => {
       if (e.key !== 'Tab') return;
       const items = [...el.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter(

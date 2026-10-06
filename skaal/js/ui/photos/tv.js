@@ -38,12 +38,17 @@ export function TvPhotos({ room, d }) {
       : null;
   }
   const p = d.players.get(photo.pid);
+  const talk = d.comments.get(photo.key);
+  const said = talk?.[talk.length - 1];
   return html`<figure class="card tv-photo">
     ${under ? html`<${Layer} key=${under.key} src=${under.src} />` : null}
     <${Layer} key=${photo.key} src=${src} label=${photoLabel(d, photo)} top />
     <figcaption class="tv-photo__cap" key=${`cap-${photo.key}`}>
       <${Avatar} player=${p} size=${30} />
-      <span><strong>${p?.name || 'En gæst'}</strong>${photo.cap ? html` — ${photo.cap}` : null}</span>
+      <span class="tv-photo__text">
+        <span><strong>${p?.name || 'En gæst'}</strong>${photo.cap ? html` — ${photo.cap}` : null}</span>
+        ${said ? html`<small key=${said.key}>💬 <strong>${d.players.get(said.pid)?.name || 'En gæst'}</strong> ${said.txt}</small>` : null}
+      </span>
     </figcaption>
   </figure>`;
 }

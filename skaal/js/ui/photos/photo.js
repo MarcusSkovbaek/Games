@@ -9,6 +9,7 @@ import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
 import { sfx, haptic } from '../feedback.js';
 import { fmtAgo, fmtClock } from '../format.js';
+import { CommentsPanel, openComments } from './comments.js';
 
 export const LIKE = '❤️';
 export const likesOf = (d, key) => d.reactions.get(key)?.get(LIKE)?.size || 0;
@@ -128,6 +129,7 @@ function PhotoTile({ room, d, photo, badge }) {
   const thumb = useThumb(room, photo, useNear(ref));
   const p = d.players.get(photo.pid);
   const likes = likesOf(d, photo.key);
+  const talk = d.comments.get(photo.key)?.length || 0;
   return html`<button type="button" ref=${ref} class="photo-tile" onClick=${() => eventUi.set({ photo: photo.key })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
     <${PhotoFrame} src=${thumb.url} />
     ${!thumb.url ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
@@ -137,6 +139,7 @@ function PhotoTile({ room, d, photo, badge }) {
       <${Avatar} player=${p} size=${22} />
       <span class="photo-tile__name">${p?.name}</span>
       ${likes ? html`<span class="photo-tile__likes">${LIKE} ${likes}</span>` : null}
+      ${talk ? html`<span class="photo-tile__likes">💬 ${talk}</span>` : null}
     </span>
   </button>`;
 }
@@ -156,12 +159,36 @@ export function PlayButton({ d, label = 'Afspil aftenen' }) {
   return html`<${Button} variant="secondary" block icon="play" onClick=${() => playEvening(d)}>${label}<//>`;
 }
 
+// While the on-screen keyboard is up, the viewer ends above it (so the comment field stays in
+// view).
+function useKeyboardInset(active) {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!active || !vv) return undefined;
+    const update = () => setInset(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      setInset(0);
+    };
+  }, [active]);
+  return inset;
+}
+
+const typing = (e) => !!e.target?.closest?.('input, textarea');
+
 // Full screen, one photo at a time; swipe (or arrow keys) for the next. `extra(photo)` adds
 // controls (the pub golf judge's podium buttons). In a slideshow (eventUi.show) the photos come
-// in the order they were taken; holding a finger on the photo or zooming in pauses it.
+// in the order they were taken; holding a finger on the photo, zooming in or reading the comments
+// pauses it.
 export function PhotoViewer({ room, d, extra }) {
   const key = useStore(eventUi, (s) => s.photo);
   const show = useStore(eventUi, (s) => !!s.show);
+  const comments = useStore(eventUi, (s) => s.comments || false);
   const photos = d.photos;
   const index = photos.findIndex((ph) => ph.key === key);
   const photo = index >= 0 ? photos[index] : null;
@@ -171,9 +198,11 @@ export function PhotoViewer({ room, d, extra }) {
   const root = useRef(null);
   useModalFocus(root, !!photo);
   const close = () => {
-    eventUi.set({ photo: null, show: false });
+    eventUi.set({ photo: null, show: false, comments: false });
     setConfirm(false);
   };
+  const closeComments = () => eventUi.set({ comments: false });
+  const kb = useKeyboardInset(!!photo && !!comments);
   const go = (step) => {
     const next = photos[index + step];
     if (next) {
@@ -187,14 +216,16 @@ export function PhotoViewer({ room, d, extra }) {
     if (key && !photo) close();
   }, [key, !!photo]);
   // The keys always act on the photo shown now (the handler outlives the render it was made in).
+  // Escape closes the comments first; the arrows leave a comment being written alone.
   const keys = useRef(null);
-  keys.current = { close, go };
+  keys.current = { close: comments ? closeComments : close, go };
   // (A layout effect, so the keys work from the moment the viewer is on screen.)
   useLayoutEffect(() => {
     if (!photo) return undefined;
     document.documentElement.classList.add('scroll-locked', 'media-open');
     const onKey = (e) => {
       if (e.key === 'Escape') keys.current.close();
+      else if (typing(e)) return;
       else if (e.key === 'ArrowRight') keys.current.go(1);
       else if (e.key === 'ArrowLeft') keys.current.go(-1);
     };
@@ -266,8 +297,18 @@ export function PhotoViewer({ room, d, extra }) {
     // From the newest photo, the evening starts over from the first one.
     else eventUi.set({ show: true, photo: later ? photo.key : photos[photos.length - 1].key });
   };
-  const running = show && !held && !zoomed && !confirm && !!(full.url || full.failed);
-  return html`<div class=${cx('viewer', show && 'is-show')} ref=${root} tabindex="-1" role="dialog" aria-modal="true" aria-label=${photoLabel(d, photo)} onContextMenu=${block}>
+  const running = show && !held && !zoomed && !confirm && !comments && !!(full.url || full.failed);
+  const talk = d.comments.get(photo.key)?.length || 0;
+  return html`<div
+    class=${cx('viewer', show && 'is-show', comments && 'is-talking')}
+    ref=${root}
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-label=${photoLabel(d, photo)}
+    style=${kb ? { bottom: `${kb}px` } : null}
+    onContextMenu=${block}
+  >
     ${show
       ? html`<div class="viewer__progress" aria-hidden="true">
           <i key=${photo.key} class=${running ? null : 'is-paused'} onAnimationEnd=${advance}></i>
@@ -279,6 +320,7 @@ export function PhotoViewer({ room, d, extra }) {
         <strong>${mine ? 'Dig' : p?.name || 'En gæst'}</strong>
         <small>${show ? `kl. ${fmtClock(photo.ts)}` : `${fmtAgo(photo.ts, d.t)} · ${index + 1} af ${photos.length}`}</small>
       </span>
+      ${photos.length > 1 ? html`<${IconButton} icon=${show ? 'pause' : 'play'} label=${show ? 'Sæt på pause' : 'Afspil billederne'} onClick=${play} />` : null}
       <${IconButton} icon="x" label="Luk" onClick=${close} data-autofocus />
     </header>
     <${ZoomStage} photoKey=${photo.key} src=${full.url || thumb.url} label=${photoLabel(d, photo)} onStep=${go} onClose=${close} onHold=${setHeld} onZoom=${setZoomed}>
@@ -287,7 +329,9 @@ export function PhotoViewer({ room, d, extra }) {
       ${index > 0 ? html`<button type="button" class="viewer__nav viewer__nav--prev" aria-label="Forrige billede" onClick=${() => go(-1)}><${Icon} name="chevron-left" size=${26} /></button>` : null}
       ${index < photos.length - 1 ? html`<button type="button" class="viewer__nav viewer__nav--next" aria-label="Næste billede" onClick=${() => go(1)}><${Icon} name="chevron-right" size=${26} /></button>` : null}
     <//>
-    <footer class="viewer__bottom">
+    ${comments
+      ? html`<${CommentsPanel} room=${room} d=${d} photo=${photo} write=${comments === 'write'} onClose=${closeComments} />`
+      : html`<footer class="viewer__bottom">
       ${photo.cap ? html`<p class="viewer__cap">${photo.cap}</p>` : null}
       ${confirm
         ? html`<div class="viewer__confirm" role="group" aria-label="Bekræft">
@@ -299,18 +343,16 @@ export function PhotoViewer({ room, d, extra }) {
             <button type="button" class=${cx('viewer__like', liked && 'is-on')} aria-pressed=${liked} onClick=${like}>
               <span aria-hidden="true">${LIKE}</span> ${likes || ''}<span class="sr-only">${liked ? 'Fjern like' : 'Like'}</span>
             </button>
-            ${photos.length > 1
-              ? html`<button type="button" class="viewer__action" aria-pressed=${show} onClick=${play}>
-                  <${Icon} name=${show ? 'pause' : 'play'} size=${18} />${show ? 'Pause' : 'Afspil'}
-                </button>`
-              : null}
+            <button type="button" class="viewer__talk" onClick=${() => openComments(photo, talk ? 'read' : 'write')}>
+              <${Icon} name="message-circle" size=${18} /> ${talk || ''}<span class="sr-only">${talk ? `${talk === 1 ? 'kommentar' : 'kommentarer'}` : 'Skriv en kommentar'}</span>
+            </button>
             <span class="spacer"></span>
             ${canRemove
               ? html`<button type="button" class="viewer__action" onClick=${() => setConfirm(true)}><${Icon} name=${mine ? 'trash' : 'eye'} size=${18} />${mine ? 'Slet' : 'Skjul'}</button>`
               : null}
           </div>`}
       ${extra ? extra(photo) : null}
-    </footer>
+    </footer>`}
   </div>`;
 }
 
@@ -353,6 +395,7 @@ function ZoomStage({ photoKey, src, label, onStep, onClose, onHold, onZoom, chil
 
   useLayoutEffect(() => {
     const onKey = (e) => {
+      if (typing(e)) return;
       if (e.key === '+' || e.key === '=') setView((v) => ({ ...zoomAt(v.s * 1.6, box().cx, box().cy, v), live: false }));
       else if (e.key === '-' || e.key === '0') setView(RESET);
     };

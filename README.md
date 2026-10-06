@@ -111,6 +111,10 @@ sekunder) til gruppebilleder. Skriv en tekst, hvis du vil, og tryk *Del med alle
   som et lysbilledshow i den rækkefølge, de blev taget — med klokkeslæt og en bjælke, der viser
   tiden. Hold fingeren på billedet for at holde pause, og stryg for at springe frem eller tilbage.
   Indtil det første billede er taget, minder storskærmen gæsterne om, at de kan tage billeder.
+- **Kommentarer:** Skriv under et billede (💬 i billedet eller i feedet). De nyeste kommentarer står
+  under billedet i feedet og på storskærmen, og den, der tog billedet, får besked med en
+  *Svar*-knap. Man kan slette sine egne kommentarer, og værten (i pub golf også dommeren) kan skjule
+  andres.
 - **Like, slet og skjul:** Alle kan give et ❤️. Man kan slette sine egne billeder, og værten — i
   pub golf også dommeren — kan skjule andres. Begge dele fjerner billedet fra alles telefoner og fra
   serverne. Under **Mig → Fotos** kan værten slå fotos fra og slette alle aftenens billeder på én

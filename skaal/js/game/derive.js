@@ -10,7 +10,7 @@ import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
 import { derivePubGolf, officialsOf } from './pubgolf.js';
 import { derivePhotos } from './photos.js';
 
-const AFTER_END = new Set(['ack', 'react', 'photo', 'phide', 'pghide']);
+const AFTER_END = new Set(['ack', 'react', 'photo', 'pc', 'phide', 'pghide']);
 
 // Player identity colours: a categorical palette validated for colour-blind separation and
 // contrast against the app's dark surface. Assigned in fixed slot order as players join.
@@ -108,7 +108,7 @@ export function derive(room, t) {
   for (const item of all) {
     const { pid, e } = item;
     if (e.t === 'x' || voided.has(`${pid}:${e.id}`)) continue;
-    // After the end only acknowledgements, reactions and photos still come in.
+    // After the end only acknowledgements, reactions, photos and comments still come in.
     if (ended && e.ts > ended && !AFTER_END.has(e.t)) continue;
     (by[e.t] ||= []).push(item);
     entryIndex.set(`${pid}:${e.id}`, item);
@@ -412,7 +412,7 @@ export function derive(room, t) {
   const officials = meta?.type === 'pubgolf' ? officialsOf(meta) : null;
   const canHide = (pid, ts) => pid === meta?.hostId || !!officials?.officialAt(pid, ts);
   const voidedPhotos = all.filter(({ pid, e }) => e.t === 'photo' && voided.has(`${pid}:${e.id}`));
-  const { photos, photoByKey, gone: photosGone } = derivePhotos({ list, assets, canHide, voided: voidedPhotos });
+  const { photos, photoByKey, comments, gone: photosGone } = derivePhotos({ list, assets, canHide, voided: voidedPhotos });
   for (const photo of photos) feed.push({ key: photo.key, ts: photo.ts, kind: 'photo', pid: photo.pid, photo });
 
   // Pub golf events: course, teams, scores and competitions.
@@ -465,6 +465,7 @@ export function derive(room, t) {
     toasts,
     photos,
     photoByKey,
+    comments,
     photosGone,
     canHidePhotos: canHide(me, t),
     pg,
