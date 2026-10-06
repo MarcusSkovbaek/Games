@@ -1049,6 +1049,14 @@ const scenarios = {
   async 'layout & accessibility: 320px phone, axe scan of every tab'(env) {
     const { ph: host, code } = await createEvent(env);
     const se = await env.phone('se', { width: 320, height: 568, scale: 2 });
+    // Creating a party or a pub golf round fits a small phone too.
+    await se.page.goto(env.appUrl('#/ny'));
+    await se.page.waitForSelector('.drink-toggle');
+    const sideways = () => se.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert.equal(await sideways(), 0, 'create a party: no horizontal scrolling at 320px');
+    await se.page.getByRole('radio', { name: /Pub golf/ }).click();
+    await se.page.waitForSelector('.pg-edit__item');
+    assert.equal(await sideways(), 0, 'create pub golf: no horizontal scrolling at 320px');
     await se.page.goto(env.appUrl(`#/e/${code}`));
     await se.page.fill('input[name=name]', 'Lille Lars Christian Kristensen');
     await se.page.getByRole('button', { name: /Deltag i festen/ }).click();

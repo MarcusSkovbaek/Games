@@ -1355,10 +1355,17 @@ html.media-open .toasts {
 
 .drink-toggle {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 6px 12px;
   min-height: 60px;
+  padding: 4px 0;
   border-bottom: 1px solid var(--line);
+}
+
+/* On small phones the stepper moves under the name rather than out of the card. */
+.drink-toggle .stepper {
+  margin-left: auto;
 }
 
 .drink-toggle:last-child {
@@ -1374,8 +1381,24 @@ html.media-open .toasts {
 }
 
 .drink-toggle__name {
-  flex: 1;
+  flex: 1 1 5em;
+  min-width: 0;
   font-weight: 600;
+}
+
+@media (max-width: 400px) {
+  .drink-toggle {
+    column-gap: 10px;
+  }
+
+  .drink-toggle .stepper__btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .drink-toggle .stepper__value {
+    min-width: 28px;
+  }
 }
 
 .drink-toggle__name small {
@@ -5323,12 +5346,15 @@ button.team-chip {
 
 .pg-edit__row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
+/* Room for "Vodka-juice"; on small phones the par goes under the drink. */
 .pg-edit__row .input {
-  flex: 1;
+  flex: 1 1 7.5em;
   min-width: 0;
 }
 
