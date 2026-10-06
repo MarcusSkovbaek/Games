@@ -119,13 +119,6 @@ try {
   await wait(800);
   await save(anna.page, '7-feed');
 
-  const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1.5 });
-  await tv.page.goto(env.appUrl(`#/tv/${code}`));
-  await tv.page.waitForSelector('.tv__board .board-row');
-  await wait(1200);
-  await save(tv.page, '8-storskaerm');
-  await tv.context.close();
-
   // Handing out sips by tapping, the pop-up it causes, and a fællesskål.
   for (const ph of all) await tab(ph, 'Drik');
   await dismissPopups(all);
@@ -172,10 +165,20 @@ try {
     await ph.page.locator('.toast', { hasText: 'delte et billede' }).first().getByRole('button', { name: 'Se' }).click().catch(() => {});
     await ph.page.getByRole('button', { name: 'Luk', exact: true }).click().catch(() => {});
   }
+  // Anna and Bo comment on Sara's photo.
+  const dance = await derived(host, (d) => d.photos.find((ph) => ph.cap === 'Dansegulvet er åbent').key);
+  const comment = (ph, txt) => ph.page.evaluate(([k, t]) => window.__skaal.session.get().room.append({ t: 'pc', k, txt: t }), [dance, txt]);
+  await comment(anna, 'Haha, de moves 🕺🔥');
+  await wait(400);
+  await comment(bo, 'Jeg er på vej ned på gulvet!');
   await tab(host, 'Feed');
   await host.page.waitForFunction(() => document.querySelectorAll('.feed-photo').length >= 3, null, { timeout: 10000 });
+  await host.page.waitForSelector('.feed-comments');
   await wait(5500); // let the photos sharpen and the toasts fade
+  await host.page.evaluate(() => window.scrollTo(0, 70));
+  await wait(300);
   await save(host.page, '21-feed-fotos');
+  await host.page.evaluate(() => window.scrollTo(0, 0));
   await host.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
   await wait(600);
   await save(host.page, '22-fotos');
@@ -185,7 +188,31 @@ try {
   await wait(600);
   await save(host.page, '23-billede');
   await host.page.getByRole('button', { name: 'Luk', exact: true }).click();
+  await host.page.locator('.photo-tile', { hasText: 'Sara' }).click();
+  await host.page.getByRole('button', { name: /2 kommentarer/ }).click();
+  await host.page.waitForSelector('.viewer__comments');
+  await host.page.waitForFunction(() => getComputedStyle(document.querySelector('.viewer__photo')).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+  await wait(600);
+  await save(host.page, '24-kommentarer');
+  await host.page.keyboard.press('Escape');
+  await host.page.keyboard.press('Escape');
   await host.page.locator('.segmented__opt', { hasText: 'Alt' }).click();
+
+  // The big screen: standings, the newest photo with its newest comment, the feed.
+  const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1.5 });
+  await tv.page.goto(env.appUrl(`#/tv/${code}`));
+  await tv.page.waitForSelector('.tv__board .board-row');
+  // A minute on, past the fællesskål; then wait for Sara's photo (the one with comments) to come round.
+  const offset = await host.page.evaluate(() => window.__skaal.getClockOffset());
+  await tv.page.evaluate((ms) => window.__skaal.setClockOffset(ms), offset + 61_000);
+  const saraOnTv = () => !!document.querySelector('.tv-photo__text small') && getComputedStyle(document.querySelector('.tv-photo__layer.is-top .tv-photo__img')).backgroundImage.includes('blob:');
+  for (let i = 0; i < 3; i++) {
+    await tv.page.waitForFunction(saraOnTv, null, { timeout: 30000 });
+    await wait(1300); // the cross-fade
+    if (await tv.page.evaluate(saraOnTv)) break;
+  }
+  await save(tv.page, '8-storskaerm');
+  await tv.context.close();
 
   // Tour de France: the host switches the mode on; Sara rides to 20 drinks and logs the 21st.
   await tab(host, 'Mig');

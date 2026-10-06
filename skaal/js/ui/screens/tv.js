@@ -5,14 +5,14 @@ import { isValidCode, formatCode } from '../../core/ids.js';
 import { now } from '../../core/clock.js';
 import { gameById } from '../../minigames/index.js';
 import { drinkById } from '../../game/drinks.js';
-import { QR } from '../qr.js';
-import { eventLink, navigate } from '../router.js';
+import { navigate } from '../router.js';
 import { fmtPoints, fmtDuration, fmtAgo } from '../format.js';
 import { FeedText, gameSummary } from '../feedText.js';
 import { TITLE_EMOJI } from './board.js';
 import { TourOverlay, SongButton } from './tour.js';
 import { GroupToastOverlay } from './groupToast.js';
 import { PgTv } from '../pubgolf/tv.js';
+import { TvInvite } from '../tvInvite.js';
 import { TvPhotos } from '../photos/tv.js';
 import { stopTourSong } from '../tourSong.js';
 import { audioReady, audioContext } from '../feedback.js';
@@ -78,9 +78,7 @@ export function TvRoute({ code }) {
       </div>
       <${SongButton} label />
       ${d.tour.on ? html`<${SoundUnlock} />` : null}
-      <button type="button" class="btn btn--secondary btn--sm" onClick=${() => document.documentElement.requestFullscreen?.()}>
-        <${Icon} name="maximize-2" size=${16} /><span class="btn__label">Fuld skærm</span>
-      </button>
+      <${TvInvite} code=${code} />
     </header>
 
     <section class="tv__board board">
@@ -150,13 +148,6 @@ export function TvRoute({ code }) {
         </div>
       </div>
 
-      <div class="card tv__join">
-        <${QR} text=${eventLink(code)} />
-        <div>
-          <div class="code-label">Scan for at deltage</div>
-          <div class="code-display" style=${{ fontSize: '34px' }}>${formatCode(code)}</div>
-        </div>
-      </div>
     </aside>
     <${TourOverlay} room=${room} d=${d} tv />
     <${GroupToastOverlay} room=${room} d=${d} tv />

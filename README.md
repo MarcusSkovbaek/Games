@@ -32,9 +32,12 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 <p><img src="docs/screenshots/8-storskaerm.jpg" width="780" alt="Storskærm" /></p>
 <p>
   <img src="docs/screenshots/20-kamera.jpg" width="190" alt="Kameraet i appen" />
-  <img src="docs/screenshots/21-feed-fotos.jpg" width="190" alt="Billeder i feedet mellem drinks" />
+  <img src="docs/screenshots/21-feed-fotos.jpg" width="190" alt="Billeder og kommentarer i feedet mellem drinks" />
   <img src="docs/screenshots/22-fotos.jpg" width="190" alt="Alle aftenens billeder" />
+</p>
+<p>
   <img src="docs/screenshots/23-billede.jpg" width="190" alt="Et billede i fuld størrelse" />
+  <img src="docs/screenshots/24-kommentarer.jpg" width="190" alt="Kommentarer på et billede" />
 </p>
 <p>
   <img src="docs/screenshots/14-pubgolf-bane.jpg" width="190" alt="Pub golf: hullet, dine slag og dit hold" />

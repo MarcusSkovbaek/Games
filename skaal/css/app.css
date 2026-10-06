@@ -4143,21 +4143,33 @@ button.mg-option:active:not(:disabled) {
   -webkit-mask-image: linear-gradient(180deg, #000 80%, transparent);
 }
 
-.tv__join {
-  flex: none;
-}
-
-.tv__join {
+.tv__invite {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 18px;
-  padding: 18px;
+  gap: 16px;
 }
 
-.tv__join .qr {
-  width: 150px;
-  padding: 10px;
-  border-radius: 18px;
+.tv__invite .qr {
+  width: 112px;
+  padding: 7px;
+  border-radius: 16px;
+}
+
+.tv__invite-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.tv__code {
+  font-size: 30px;
+}
+
+.tv__full {
+  margin-left: -10px;
+  color: var(--text-3);
 }
 
 .confetti-canvas {
@@ -7898,12 +7910,17 @@ button.pg-edit__emoji {
 
 .tv-photo {
   position: relative;
-  flex: none;
-  aspect-ratio: 4 / 3;
+  /* Shares the column with the feed (3 : 2), so the join code below always stays on screen. */
+  flex: 3 1 0;
+  min-height: 160px;
   margin: 0;
   padding: 0;
   overflow: hidden;
   animation: fade-in 0.8s var(--ease);
+}
+
+.tv-photo + .tv__feed {
+  flex: 2 1 0;
 }
 
 .tv--pg .tv-photo {

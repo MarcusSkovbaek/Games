@@ -1,12 +1,10 @@
 // Big screen for pub golf: team standings, the hole the group is at, the latest photos and the
 // competition winners — plus challenges and podiums as they happen.
-import { html, Avatar, Icon, cx } from '../kit.js';
-import { formatCode } from '../../core/ids.js';
-import { QR } from '../qr.js';
-import { eventLink } from '../router.js';
+import { html, Avatar, cx } from '../kit.js';
 import { ToPar, TeamBadge, PlayerAvatar, holeTitle, MEDALS, entrantName } from './common.js';
 import { ChallengeOverlay, PodiumOverlay } from './overlays.js';
 import { TvPhotos } from '../photos/tv.js';
+import { TvInvite } from '../tvInvite.js';
 
 export function PgTv({ room, d, code }) {
   const pg = d.pg;
@@ -25,9 +23,7 @@ export function PgTv({ room, d, code }) {
           ${d.ended ? 'Afsluttet' : 'Live'} · ⛳ Pub golf · ${d.ranking.filter((p) => !p.left).length} spillere
         </div>
       </div>
-      <button type="button" class="btn btn--secondary btn--sm" onClick=${() => document.documentElement.requestFullscreen?.()}>
-        <${Icon} name="maximize-2" size=${16} /><span class="btn__label">Fuld skærm</span>
-      </button>
+      <${TvInvite} code=${code} />
     </header>
 
     <section class="tv__board pg-tv">
@@ -85,13 +81,6 @@ export function PgTv({ room, d, code }) {
           </div>`
         : null}
 
-      <div class="card tv__join">
-        <${QR} text=${eventLink(code)} />
-        <div>
-          <div class="code-label">Scan for at deltage</div>
-          <div class="code-display" style=${{ fontSize: '34px' }}>${formatCode(code)}</div>
-        </div>
-      </div>
     </aside>
     <${ChallengeOverlay} room=${room} d=${d} tv />
     <${PodiumOverlay} room=${room} d=${d} tv />

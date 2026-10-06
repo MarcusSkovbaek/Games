@@ -305,7 +305,7 @@ const scenarios = {
     await tv.page.goto(env.appUrl(`#/tv/${code}`));
     await tv.page.waitForSelector('.tv__board .board-row');
     await shot(tv.page, 'e2e-tv');
-    const qrVisible = await tv.page.locator('.tv__join').evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight);
+    const qrVisible = await tv.page.locator('.tv__invite .qr').evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight);
     assert.ok(qrVisible, 'TV join QR fits on screen');
 
     await host.page.getByRole('button', { name: /Afslut eventet/ }).click();
@@ -798,8 +798,10 @@ const scenarios = {
     await anna.page.keyboard.press('Escape');
     await anna.page.waitForSelector('.viewer', { state: 'detached' });
 
-    // The big screen shows it too, full size.
+    // The big screen shows it too, full size — with room to spare for the feed.
     await tv.page.waitForFunction(() => getComputedStyle(document.querySelector('.tv-photo__img') || document.body).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+    const tvBoxes = await tv.page.evaluate(() => ['.tv-photo', '.tv__feed', '.tv__invite .qr'].map((sel) => document.querySelector(sel).getBoundingClientRect()).map((r) => [Math.round(r.height), r.bottom <= innerHeight]));
+    assert.ok(tvBoxes.every(([h, inside]) => h > 60 && inside), `photo, feed and QR all on screen: ${JSON.stringify(tvBoxes)}`);
 
     // Bo picks one from his camera roll; Anna sees the like on hers in the photo grid.
     await pickPhoto(bo, await photoOf(env.browser, '🎤', '#a18cd1,#fbc2eb'), 'Karaoke');
