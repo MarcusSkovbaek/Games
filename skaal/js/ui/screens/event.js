@@ -132,14 +132,17 @@ function EventApp({ room }) {
     if (d.ended) eventUi.set({ tab: 'home', invite: false, player: null, spin: null });
   }, [d.ended]);
 
-  const latestFeed = d.feed.find((f) => f.pid !== room.pid)?.ts || 0;
+  // News in the feed: what others did — and our own photos from the disposable camera, which we
+  // haven't seen either until they develop.
+  const news = (f) => f.pid !== room.pid || !!(f.photo || f.photos?.[0])?.ds;
+  const latestFeed = d.feed.find(news)?.ts || 0;
   useEffect(() => {
     if (ui.tab === 'feed' && latestFeed > feedSeen) {
       setFeedSeen(latestFeed);
       storage.save(`feedSeen:${room.roomId}`, latestFeed);
     }
   }, [ui.tab, latestFeed]);
-  const unreadFeed = ui.tab === 'feed' ? 0 : d.feed.filter((f) => f.ts > feedSeen && f.pid !== room.pid && f.kind !== 'join').length;
+  const unreadFeed = ui.tab === 'feed' ? 0 : d.feed.filter((f) => f.ts > feedSeen && news(f) && f.kind !== 'join').length;
 
   if (d.ended && ui.tab !== 'board' && ui.tab !== 'feed' && ui.tab !== 'me') {
     return html`<${FinalScreen} room=${room} d=${d} onTab=${setTab} /><${PhotoLayer} room=${room} d=${d} />`;

@@ -1109,9 +1109,11 @@ const scenarios = {
     await host.page.waitForFunction(() => window.__skaal.derived().undeveloped.length === 24, null, { timeout: 15000 });
 
     // A day later they develop — for everyone at once, Anna's own included.
+    await tab(bo, 'Drik');
     await fastForward([...all, tv], DAY + 5000);
     for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 24, null, { timeout: 8000 });
     await bo.page.waitForSelector('.toast:has-text("af dine billeder er fremkaldt")', { timeout: 8000 });
+    assert.equal(await bo.page.locator('.tab', { hasText: 'Feed' }).locator('.tab__badge').textContent(), '3', 'his own photos are news to him too');
     await anna.page.waitForSelector('.toast:has-text("fra Bo er fremkaldt")', { timeout: 8000 });
     assert.equal(await anna.page.locator('.develop-card').count(), 0);
     assert.match(await anna.page.locator('.feed-item').first().textContent(), /Bo fik fremkaldt 11 billeder fra engangskameraet \(taget i går kl\. \d\d:\d\d\)/);
