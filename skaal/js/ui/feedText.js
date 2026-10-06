@@ -4,7 +4,7 @@ import { drinkById } from '../game/drinks.js';
 import { wheelById, outcomeById } from '../game/wheels.js';
 import { faceById } from '../game/tour.js';
 import { gameById } from '../minigames/index.js';
-import { fmtPoints, unitText, sips } from './format.js';
+import { fmtPoints, unitText, sips, fmtWhen } from './format.js';
 import { RULES } from '../game/content/prompts.js';
 
 export function nameOf(d, pid, { me = true, capital = true } = {}) {
@@ -96,10 +96,15 @@ export function FeedText({ d, item, emoji = false }) {
       return html`${emoji ? '🏆 ' : ''}${B(comp?.name || 'Konkurrence')}: ${places.length ? places.join(' · ') : 'podiet er nulstillet'}`;
     }
     case 'photo':
-      return html`${emoji ? '📸 ' : ''}${who} delte et billede${item.photo.cap ? html`: <span class="feed-item__quote">“${item.photo.cap}”</span>` : null}`;
     case 'photos': {
-      const cap = item.photos.find((ph) => ph.cap)?.cap;
-      return html`${emoji ? '📸 ' : ''}${who} delte ${item.photos.length} billeder${cap ? html`: <span class="feed-item__quote">“${cap}”</span>` : null}`;
+      const photos = item.photos || [item.photo];
+      const n = photos.length;
+      // From the disposable camera: in the feed from when they developed.
+      if (photos[0].ds) {
+        return html`${emoji ? '🎞️ ' : ''}${who} fik fremkaldt ${n === 1 ? 'et billede' : `${n} billeder`} fra engangskameraet <span class="faint">(taget ${fmtWhen(photos[0].ts, d.t)})</span>`;
+      }
+      const cap = photos.find((ph) => ph.cap)?.cap;
+      return html`${emoji ? '📸 ' : ''}${who} delte ${n === 1 ? 'et billede' : `${n} billeder`}${cap ? html`: <span class="feed-item__quote">“${cap}”</span>` : null}`;
     }
     case 'pgchal':
       return html`${emoji ? '🎲 ' : ''}Udfordring: ${item.text}`;

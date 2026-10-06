@@ -6,6 +6,7 @@ import { confetti, sfx } from '../feedback.js';
 import { reopenEvent } from '../../app/actions.js';
 import { navigate } from '../router.js';
 import { PhotoOfTheNight } from '../photos/photo.js';
+import { DevelopCard } from '../photos/layer.js';
 import { eventUi } from './event.js';
 
 export function awardsFor(d) {
@@ -90,6 +91,7 @@ export function FinalScreen({ room, d, onTab }) {
           onTab('feed');
         }}
       />
+      <${DevelopCard} room=${room} d=${d} />
 
       ${awards.length
         ? html`<section class="section">

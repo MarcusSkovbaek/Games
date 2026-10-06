@@ -138,6 +138,10 @@ export const sfx = {
     noise({ dur: 0.045, gain: 0.3, from: 2600, to: 5200 });
     noise({ at: 0.075, dur: 0.06, gain: 0.2, from: 1700, to: 3800 });
   },
+  // Winding on the film of a disposable camera: a quick ratchet.
+  wind() {
+    for (let i = 0; i < 6; i++) noise({ at: 0.18 + i * 0.05, dur: 0.028, gain: 0.1, from: 1100 + i * 120, to: 2300 });
+  },
   // Tour de France (when no song is set up): a bike bell, then a brass-like fanfare.
   tour() {
     for (const at of [0, 0.16]) {

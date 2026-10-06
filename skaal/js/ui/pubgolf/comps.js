@@ -8,7 +8,7 @@ import { setPodium, startGame, startCompetition, showCompetitions } from '../../
 import { getDerived } from '../../app/session.js';
 import { confirmDialog, toast } from '../ui-store.js';
 import { sfx } from '../feedback.js';
-import { fmtAgo } from '../format.js';
+import { fmtAgo, fmtWhen } from '../format.js';
 import { eventUi } from '../screens/event.js';
 import { InboxCard } from '../screens/home.js';
 import { TeamChip, MEDALS, entrantName, entrantColor } from './common.js';
@@ -69,7 +69,7 @@ export function CompetitionsTab({ room, d }) {
           d=${d}
           comp=${comp}
           result=${pg.results.get(comp.id)}
-          canEdit=${judging}
+          canEdit=${judging || (pg.isJudge && comp.kind === 'photo')}
           onEdit=${() => setPodiumFor(comp.id)}
           onStart=${judging ? () => start(comp) : null}
         />`,
@@ -126,7 +126,11 @@ export function CompCard({ room, d, comp, result, canEdit, onEdit, onStart }) {
           )}
         </ol>`
       : html`<p class="pg-comp__empty">
-          ${secret ? 'Spillerne ser den først, når du starter den. ' : ''}${comp.kind === 'photo' ? 'Del jeres bedste billeder under Fotos — dommeren vælger podiet.' : 'Ikke afgjort endnu.'}
+          ${secret ? 'Spillerne ser den først, når du starter den. ' : ''}${comp.kind !== 'photo'
+            ? 'Ikke afgjort endnu.'
+            : d.settings.disposable || d.undeveloped.length
+              ? 'Billederne fra engangskameraet fremkaldes 24 timer efter, de er taget — så vælger dommeren podiet.'
+              : 'Del jeres bedste billeder under Fotos — dommeren vælger podiet.'}
         </p>`}
     ${canEdit
       ? html`<div class="pg-comp__actions">
@@ -155,6 +159,11 @@ function PodiumSheet({ room, d, comp, onClose }) {
     : pg.cfg.teams.length
       ? pg.cfg.teams.map((t) => ({ id: t.id, team: pg.teamById.get(t.id) }))
       : d.ranking.filter((p) => !p.left).map((p) => ({ id: p.pid, player: p }));
+  // Photos from the disposable camera can be picked once they have developed.
+  const waiting = photo ? d.undeveloped.length : 0;
+  const developing = waiting
+    ? html`<p class="pg-photo-pick__note">⏳ ${waiting === 1 ? 'Et billede' : `${waiting} billeder`} fra engangskameraet er ikke fremkaldt endnu — ${waiting === 1 ? 'det' : 'det næste'} er klar ${fmtWhen(d.undeveloped[0].shown, d.t)}.</p>`
+    : null;
   const placeOf = (id) => picks.indexOf(id);
   const assign = (place, id) => setPicks((cur) => cur.map((x, i) => (i === place ? (x === id ? null : id) : x === id ? null : x)));
   // Photos: tapping fills the next free place; tapping a placed photo takes it off.
@@ -196,8 +205,8 @@ function PodiumSheet({ room, d, comp, onClose }) {
                 <span class="pg-photo-pick__who">${d.players.get(ph.pid)?.name}</span>
               </button>`;
             })}
-          </div>`
-        : html`<p class="muted">Der er ingen billeder endnu — de dukker op her, når nogen tager et.</p>`
+          </div>${developing}`
+        : html`<p class="muted">Der er ingen billeder endnu — de dukker op her, når nogen tager et.</p>${developing}`
       : html`<div class="stack">
           ${[0, 1, 2].map(
             (place) => html`<div class="pg-podium-row">

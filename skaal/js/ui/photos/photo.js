@@ -8,7 +8,7 @@ import { toggleReaction } from '../../app/actions.js';
 import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
 import { sfx, haptic } from '../feedback.js';
-import { fmtAgo, fmtClock } from '../format.js';
+import { fmtAgo, fmtClock, fmtWhen } from '../format.js';
 import { CommentsPanel, openComments } from './comments.js';
 
 export const LIKE = '❤️';
@@ -345,7 +345,7 @@ export function PhotoViewer({ room, d, extra }) {
       <${Avatar} player=${p} size=${36} />
       <span class="viewer__who">
         <strong>${mine ? 'Dig' : p?.name || 'En gæst'}</strong>
-        <small>${show ? `kl. ${fmtClock(photo.ts)}` : `${fmtAgo(photo.ts, d.t)} · ${index + 1} af ${photos.length}`}</small>
+        <small>${photo.ds ? '🎞️ ' : ''}${show ? `kl. ${fmtClock(photo.ts)}` : `${photo.ds ? `taget ${fmtWhen(photo.ts, d.t)}` : fmtAgo(photo.ts, d.t)} · ${index + 1} af ${photos.length}`}</small>
       </span>
       ${photos.length > 1 ? html`<${IconButton} icon=${show ? 'pause' : 'play'} label=${show ? 'Sæt på pause' : 'Afspil billederne'} onClick=${play} />` : null}
       <${IconButton} icon="x" label="Luk" onClick=${close} data-autofocus />

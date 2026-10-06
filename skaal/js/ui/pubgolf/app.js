@@ -65,7 +65,9 @@ export function PgEventApp({ room }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
-  const newestPhoto = d.photos.find((ph) => ph.pid !== room.pid)?.ts || 0;
+  // New photos: someone else's — or developed ones from the disposable camera (ours too).
+  const isNews = (ph) => ph.pid !== room.pid || ph.ds;
+  const newestPhoto = Math.max(0, ...d.photos.filter(isNews).map((ph) => ph.shown));
   useEffect(() => {
     if (tab === 'photos' && newestPhoto > photosSeen) {
       setPhotosSeen(newestPhoto);
@@ -73,7 +75,7 @@ export function PgEventApp({ room }) {
     }
   }, [tab, newestPhoto]);
   const badges = {
-    photos: tab === 'photos' ? 0 : d.photos.filter((ph) => ph.ts > photosSeen && ph.pid !== room.pid).length,
+    photos: tab === 'photos' ? 0 : d.photos.filter((ph) => ph.shown > photosSeen && isNews(ph)).length,
     comps: d.inbox.length,
   };
 

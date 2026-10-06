@@ -5,6 +5,7 @@
 import { html, useState, useEffect, useRef, Avatar } from '../kit.js';
 import { PhotoFrame, useFullPhoto, useThumb, photoLabel } from './photo.js';
 import { canTakePhotos } from './layer.js';
+import { fmtWhen } from '../format.js';
 
 function Layer({ src, label, top }) {
   return html`<div class=${top ? 'tv-photo__layer is-top' : 'tv-photo__layer'}>
@@ -14,9 +15,10 @@ function Layer({ src, label, top }) {
 }
 
 export function TvPhotos({ room, d }) {
-  const recent = d.photos.slice(0, 12);
+  // The latest to show up (photos from the disposable camera when they develop).
+  const recent = [...d.photos].sort((a, b) => b.shown - a.shown).slice(0, 12);
   const newest = recent[0];
-  const photo = !recent.length ? null : d.t - newest.ts < 20_000 ? newest : recent[Math.floor(d.t / 8000) % recent.length];
+  const photo = !recent.length ? null : d.t - newest.shown < 20_000 ? newest : recent[Math.floor(d.t / 8000) % recent.length];
   const thumb = useThumb(room, photo, !!photo);
   const full = useFullPhoto(room, photo, !!photo);
   const src = photo ? full.url || thumb.url : null;
@@ -30,10 +32,19 @@ export function TvPhotos({ room, d }) {
   }, [photo?.key]);
   shown.current = photo ? { key: photo.key, src } : null;
   if (!photo) {
+    const n = d.undeveloped.length;
+    if (n) {
+      return html`<div class="card card--pad tv-photo-hint">
+        <span class="tv-photo-hint__icon" aria-hidden="true">🎞️</span>
+        <span><strong>${n === 1 ? 'Et billede' : `${n} billeder`} til fremkaldelse</strong><small>${n === 1 ? 'Det' : 'Det første'} dukker op her ${fmtWhen(d.undeveloped[0].shown, d.t)}</small></span>
+      </div>`;
+    }
     return canTakePhotos(room, d) && !d.ended
       ? html`<div class="card card--pad tv-photo-hint">
-          <span class="tv-photo-hint__icon" aria-hidden="true">📸</span>
-          <span><strong>Tag billeder i appen</strong><small>De dukker op her med det samme — kun for jer i eventet</small></span>
+          <span class="tv-photo-hint__icon" aria-hidden="true">${d.settings.disposable ? '🎞️' : '📸'}</span>
+          ${d.settings.disposable
+            ? html`<span><strong>Tag billeder med engangskameraet</strong><small>Ingen ser dem, før de er fremkaldt — 24 timer efter, de er taget</small></span>`
+            : html`<span><strong>Tag billeder i appen</strong><small>De dukker op her med det samme — kun for jer i eventet</small></span>`}
         </div>`
       : null;
   }

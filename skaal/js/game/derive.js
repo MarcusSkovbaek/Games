@@ -10,7 +10,9 @@ import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
 import { derivePubGolf, officialsOf } from './pubgolf.js';
 import { derivePhotos, photoFeedItems } from './photos.js';
 
-const AFTER_END = new Set(['ack', 'react', 'photo', 'pc', 'phide', 'pghide']);
+// After the end only acknowledgements, reactions, photos, comments — and the podium of the pub golf
+// photo competition (its photos may still be developing, see derivePubGolf) — still come in.
+const AFTER_END = new Set(['ack', 'react', 'photo', 'pc', 'phide', 'pghide', 'podium']);
 
 // Player identity colours: a categorical palette validated for colour-blind separation and
 // contrast against the app's dark surface. Assigned in fixed slot order as players join.
@@ -109,7 +111,6 @@ export function derive(room, t) {
   for (const item of all) {
     const { pid, e } = item;
     if (e.t === 'x' || voided.has(`${pid}:${e.id}`)) continue;
-    // After the end only acknowledgements, reactions, photos and comments still come in.
     if (ended && e.ts > ended && !AFTER_END.has(e.t)) continue;
     (by[e.t] ||= []).push(item);
     entryIndex.set(`${pid}:${e.id}`, item);
@@ -413,7 +414,7 @@ export function derive(room, t) {
   const officials = meta?.type === 'pubgolf' ? officialsOf(meta) : null;
   const canHide = (pid, ts) => pid === meta?.hostId || !!officials?.officialAt(pid, ts);
   const voidedPhotos = all.filter(({ pid, e }) => e.t === 'photo' && voided.has(`${pid}:${e.id}`));
-  const { photos, photoByKey, comments, gone: photosGone } = derivePhotos({ list, assets, canHide, voided: voidedPhotos });
+  const { photos, photoByKey, comments, gone: photosGone, undeveloped, shots } = derivePhotos({ list, assets, canHide, voided: voidedPhotos, t });
   feed.push(...photoFeedItems(photos));
 
   // Pub golf events: course, teams, scores and competitions.
@@ -468,6 +469,8 @@ export function derive(room, t) {
     photoByKey,
     comments,
     photosGone,
+    undeveloped,
+    shotsUsed: shots.get(me) || 0,
     canHidePhotos: canHide(me, t),
     pg,
     leaderChanges,

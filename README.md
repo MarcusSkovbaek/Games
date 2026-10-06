@@ -40,6 +40,10 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   <img src="docs/screenshots/24-kommentarer.jpg" width="190" alt="Kommentarer på et billede" />
 </p>
 <p>
+  <img src="docs/screenshots/25-engangskamera.jpg" width="190" alt="Engangskameraet: ingen ser, hvad de tager billeder af" />
+  <img src="docs/screenshots/26-fremkaldt.jpg" width="190" alt="Billederne fra engangskameraet fremkaldes for alle et døgn efter" />
+</p>
+<p>
   <img src="docs/screenshots/14-pubgolf-bane.jpg" width="190" alt="Pub golf: hullet, dine slag og dit hold" />
   <img src="docs/screenshots/15-pubgolf-dommer.jpg" width="190" alt="Pub golf: dommerpanelet" />
   <img src="docs/screenshots/16-pubgolf-stilling.jpg" width="190" alt="Pub golf: holdstillingen" />
@@ -76,8 +80,9 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   hver med sin egen effekt — mens Tour-sangen spiller. Se [Tour de France](#tour-de-france).
 - **Fotos fra aftenen** — tag billeder med kameraet direkte i appen. De gemmes kun i eventet,
   alle gæster kan se dem i feedet og på storskærmen, og ingen andre kan — de er krypteret, så
-  hverken servere eller fremmede kan se dem, og de kan ikke downloades fra appen. Se
-  [Fotos fra aftenen](#fotos-fra-aftenen).
+  hverken servere eller fremmede kan se dem, og de kan ikke downloades fra appen. Slå
+  **engangskameraet** til, og ingen ser, hvad de tager billeder af: 23 billeder hver, som først
+  fremkaldes 24 timer efter. Se [Fotos fra aftenen](#fotos-fra-aftenen).
 - **Pub golf** — barerne er hullerne, og slurkene er slagene. Spil i hold med én dommer, der
   noterer slag, giver straf- og bonusslag, sender udfordringer og sætter podiet i konkurrencerne
   (bl.a. en fotokonkurrence). Se [Pub golf](#pub-golf).
@@ -146,6 +151,26 @@ kamerarullen kan du vælge op til 10 billeder ad gangen og dele dem samlet.
 Fotos kræver et event med en kode på 12 tegn (alle nye events). Ældre events med 8 tegn kan stadig
 åbnes, men har ikke fotos, fordi deres kode er for kort til at beskytte billeder godt nok.
 
+### Engangskamera
+
+Slå **🎞️ Engangskamera** til, når eventet oprettes (fest eller pub golf), eller når som helst under
+**Mig → Fotos**. Så virker kameraet som et engangskamera:
+
+- **I blinde:** Kameraet viser ikke, hvad det ser — man sigter og skyder. Der er ingen zoom, intet
+  andet kig på billedet og ingen kamerarulle; billedet deles i samme øjeblik, det tages. Blitz,
+  selfiekamera og selvudløser virker som ellers.
+- **23 billeder hver:** Tælleren og filmstrimlen viser, hvor mange billeder man har tilbage. Et
+  billede, der slettes senere, giver ikke billedet tilbage — filmen er brugt. Alle telefoner holder
+  grænsen: Et 24. billede vises aldrig.
+- **Fremkaldes efter 24 timer:** Ingen kan se billederne, før de er fremkaldt — heller ikke den,
+  der tog dem. Feedet, *Fotos* og storskærmen viser, hvor mange billeder der ligger til
+  fremkaldelse, og hvornår det næste er klar. Når et billede fremkaldes, dukker det op i feedet hos
+  alle ("Anna fik fremkaldt 5 billeder fra engangskameraet"), og alle får besked.
+- **Kan slås fra igen:** Så deles billeder med det samme igen. Billeder, der allerede er taget med
+  engangskameraet, fremkaldes stadig 24 timer efter, de blev taget.
+- **Pub golf:** Fotokonkurrencen skydes med engangskameraet, og dommeren kårer de bedste, når
+  billederne er fremkaldt — også efter runden er afsluttet.
+
 ## Pub golf
 
 Vælg **Pub golf** øverst, når du opretter eventet. Hver bar er et hul: Alle drikker hullets drik,
@@ -181,7 +206,8 @@ og antallet af slurke er ens slag — som i golf vinder den laveste score.
   hemmelige, så alle får besked, når det går løs.
 - **Fotos:** Billederne fra kameraet i appen (se [Fotos fra aftenen](#fotos-fra-aftenen)) ligger
   også under *Fotos*, med holdets farve. Dommeren sætter fotokonkurrencens podie direkte fra et
-  billede i fuld størrelse — eller under *Konkurrencer*.
+  billede i fuld størrelse — eller under *Konkurrencer*. Med [engangskameraet](#engangskamera)
+  afgøres fotokonkurrencen, når billederne er fremkaldt, også efter runden.
 - **Scorekort og storskærm:** Scorekortet viser alle huller for alle spillere. Storskærmen viser
   hullet, holdene, de bedste spillere, de seneste billeder og konkurrencevinderne, og *Afslut
   runden* fryser stillingen og kårer vinderholdet.

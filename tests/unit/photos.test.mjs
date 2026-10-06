@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { derive } from '../../skaal/js/game/derive.js';
 import { normalizeSettings, withSchedule } from '../../skaal/js/game/settings.js';
-import { photoPrefix } from '../../skaal/js/game/photos.js';
+import { photoPrefix, DISPOSABLE } from '../../skaal/js/game/photos.js';
 import { defaultSettings } from '../../skaal/js/game/settings.js';
 
 const MIN = 60000;
@@ -194,4 +194,97 @@ test('photos shared in a row by the same person are one item in the feed', () =>
   const set = items[3];
   assert.equal(set.key, `set:anna0000:${a1.entry.id}`, 'named after its first photo, so it keeps its place');
   assert.equal(set.ts, set.photos[2].ts, 'in the feed at the time of its newest photo');
+});
+
+const HOUR = 60 * MIN;
+
+test('the disposable camera is off by default; the host can turn it on', () => {
+  assert.equal(defaultSettings().disposable, false);
+  assert.equal(normalizeSettings({ disposable: true }).disposable, true);
+  assert.equal(normalizeSettings({ disposable: 'ja' }).disposable, false, 'junk keeps the default');
+  assert.deepEqual(DISPOSABLE, { shots: 23, developMs: 24 * HOUR });
+});
+
+test('disposable camera: nobody sees a photo — not even the one who took it — until it develops 24 hours later', () => {
+  const room = makeParty();
+  const shot = room.photo('anna0000', '', { th: 1, ds: 1 });
+  const normal = room.photo('bo000000', 'Med det samme');
+  const taken = shot.entry.ts;
+  for (const pid of ['anna0000', 'bo000000', 'host0000']) {
+    const d = at(room, pid, taken + DISPOSABLE.developMs - 1);
+    assert.deepEqual(d.photos.map((ph) => ph.cap), ['Med det samme'], `${pid} sees only the normal photo`);
+    assert.equal(d.photoByKey.has(`anna0000:${shot.entry.id}`), false);
+    assert.deepEqual(d.undeveloped.map((ph) => [ph.pid, ph.shown]), [['anna0000', taken + DISPOSABLE.developMs]]);
+    assert.equal(d.feed.some((f) => f.kind === 'photo' && f.photo.ds), false, 'not in the feed either');
+  }
+  // Comments and likes can't reach it before then (nobody can see it to comment on).
+  room.add('bo000000', { t: 'pc', k: `anna0000:${shot.entry.id}`, txt: 'Hvad er det?' });
+  assert.equal(at(room, 'bo000000', taken + HOUR).comments.size, 0);
+
+  const d = at(room, 'cara0000', taken + DISPOSABLE.developMs);
+  assert.deepEqual(d.photos.map((ph) => [ph.pid, ph.ds]), [['bo000000', false], ['anna0000', true]], 'in the gallery from when it was taken');
+  assert.equal(d.undeveloped.length, 0);
+  const item = d.feed.find((f) => f.kind === 'photo' && f.photo.ds);
+  assert.equal(item.ts, taken + DISPOSABLE.developMs, 'in the feed from when it developed');
+  assert.equal(d.feed[0], item, 'so it is the newest news');
+  assert.equal(d.photoByKey.get(`anna0000:${shot.entry.id}`).ts, taken, 'still taken when it was taken');
+  assert.equal(normal.entry.ts > taken, true);
+});
+
+test('disposable camera: 23 shots each — the 24th is never shown, and deleted shots still used a frame', () => {
+  const room = makeParty();
+  const shots = [];
+  for (let i = 0; i < 25; i++) shots.push(room.photo('anna0000', '', { th: 1, ds: 1 }));
+  for (let i = 0; i < 3; i++) room.photo('anna0000', 'normal'); // only the disposable camera counts
+  room.photo('bo000000', '', { th: 1, ds: 1 });
+  const later = shots[24].entry.ts + DISPOSABLE.developMs;
+  let d = at(room, 'anna0000', later);
+  assert.equal(d.shotsUsed, 23);
+  assert.equal(d.photos.filter((ph) => ph.pid === 'anna0000' && ph.ds).length, 23);
+  assert.deepEqual([...d.photosGone].sort(), [shots[23].name, shots[24].name].sort(), 'the phone that took them lets go of them');
+  assert.equal(at(room, 'bo000000', later).shotsUsed, 1);
+  // Deleting a developed shot doesn't give the frame back.
+  room.add('anna0000', { t: 'x', r: shots[0].entry.id });
+  d = at(room, 'anna0000', later);
+  assert.equal(d.shotsUsed, 23);
+  assert.equal(d.photos.filter((ph) => ph.pid === 'anna0000' && ph.ds).length, 22);
+  assert.equal(d.photoByKey.has(`anna0000:${shots[23].entry.id}`), false, 'the 24th stays out');
+});
+
+test('disposable camera: photos that develop together are one item, apart from photos shared normally', () => {
+  const room = makeParty();
+  room.photo('anna0000', '', { th: 1, ds: 1 });
+  room.photo('anna0000', '', { th: 1, ds: 1 });
+  const last = room.photo('anna0000', '', { th: 1, ds: 1 });
+  const d = at(room, 'bo000000', last.entry.ts + DISPOSABLE.developMs);
+  // Anna shares a photo right after hers have developed.
+  const now = room.photo('anna0000', 'Nu');
+  now.entry.ts = last.entry.ts + DISPOSABLE.developMs + 1000;
+  const items = at(room, 'bo000000', now.entry.ts).feed.filter((f) => f.kind === 'photo' || f.kind === 'photos');
+  assert.deepEqual(
+    items.map((f) => [f.kind, f.kind === 'photos' ? f.photos.length : f.photo.cap]),
+    [
+      ['photo', 'Nu'],
+      ['photos', 3],
+    ],
+  );
+  assert.equal(d.feed.filter((f) => f.kind === 'photos').length, 1);
+});
+
+test('pub golf: the photo competition can still be decided after the end — other competitions cannot', () => {
+  const room = makeParty();
+  const meta = room.state.meta;
+  meta.type = 'pubgolf';
+  meta.pg = { course: [{ id: 'h1', bar: 'Baren', par: 3 }], teams: [], comps: [{ id: 'photo', name: 'Fotokonkurrence', emoji: '📸', kind: 'photo' }, { id: 'bp', name: 'Bordtennis', emoji: '🏓', kind: 'team' }] };
+  meta.judges = [];
+  const shot = room.photo('anna0000', '', { th: 1, ds: 1 });
+  meta.ended = shot.entry.ts + HOUR;
+  const after = shot.entry.ts + DISPOSABLE.developMs + MIN;
+  const photoPodium = room.add('host0000', { t: 'podium', c: 'photo', photos: [`anna0000:${shot.entry.id}`] });
+  photoPodium.ts = after;
+  const teamPodium = room.add('host0000', { t: 'podium', c: 'bp', places: ['bo000000'] });
+  teamPodium.ts = after;
+  const d = at(room, 'cara0000', after + MIN);
+  assert.equal(d.pg.results.get('photo')?.places[0]?.pid, 'anna0000');
+  assert.equal(d.pg.results.has('bp'), false);
 });

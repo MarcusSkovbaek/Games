@@ -106,14 +106,19 @@ export async function bitmapFromFile(file) {
 
 // ------------------------------------------------------------------------ sharing, deleting
 
-export async function sharePhoto(room, prepared, caption = '') {
+// `disposable`: taken with the disposable camera — nobody sees it until it has developed (see
+// DISPOSABLE in game/photos.js).
+export async function sharePhoto(room, prepared, caption = '', { disposable = false } = {}) {
   if (!room.strong) throw new Error('Photos need an event with a 12-character code');
   const name = `${photoPrefix(room.pid)}${randomId(6)}`;
   const sealed = await room.publishPhoto(name, prepared.thumb, prepared.full);
-  show(thumbs, name, prepared.thumb);
-  show(fulls, name, prepared.full);
+  if (!disposable) {
+    show(thumbs, name, prepared.thumb);
+    show(fulls, name, prepared.full);
+  }
   keep(room, name, sealed);
-  return room.append({ t: 'photo', a: name, cap: String(caption || '').trim().slice(0, PHOTO.captionMax), w: prepared.w, h: prepared.h, f: 1, th: 1 });
+  const cap = String(caption || '').trim().slice(0, PHOTO.captionMax);
+  return room.append({ t: 'photo', a: name, cap, w: prepared.w, h: prepared.h, f: 1, th: 1, ...(disposable ? { ds: 1 } : {}) });
 }
 
 // Your own photo is deleted; anyone else's is hidden (host, or the pub golf judge). Either way it

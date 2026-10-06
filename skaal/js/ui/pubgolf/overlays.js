@@ -126,7 +126,11 @@ function CompStartMoment({ room, d, item, tv, onClose }) {
         <div class="pg-moment__icon" aria-hidden="true">${comp?.emoji || '🏆'}</div>
         <p class="pg-moment__text">${comp?.name || 'Konkurrence'}</p>
         <p class="pg-moment__sub">
-          ${photo ? 'Tag jeres bedste billeder — dommeren vælger podiet.' : 'Dommeren afgør, hvem der vinder.'}
+          ${!photo
+            ? 'Dommeren afgør, hvem der vinder.'
+            : d.settings.disposable
+              ? 'Tag jeres bedste billeder med engangskameraet — dommeren kårer de bedste, når de er fremkaldt.'
+              : 'Tag jeres bedste billeder — dommeren vælger podiet.'}
           ${b1 || b2 || b3 ? ` Podiet giver ${b1}, ${b2} og ${b3} slag i bonus.` : ''}
         </p>
         ${tv

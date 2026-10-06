@@ -33,6 +33,22 @@ export function fmtClock(ts) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+const WEEKDAYS = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
+
+// A moment seen from now: "i dag kl. 22:14", "i morgen kl. 09:05", "i går kl. 23:40", "lørdag kl.
+// 20:00" (within the coming week), otherwise "12/10 kl. 20:00".
+export function fmtWhen(ts, now) {
+  const midnight = (x) => new Date(x).setHours(0, 0, 0, 0);
+  const days = Math.round((midnight(ts) - midnight(now)) / 86_400_000);
+  const clock = `kl. ${fmtClock(ts)}`;
+  if (days === 0) return `i dag ${clock}`;
+  if (days === 1) return `i morgen ${clock}`;
+  if (days === -1) return `i går ${clock}`;
+  const d = new Date(ts);
+  if (days > 1 && days < 7) return `${WEEKDAYS[d.getDay()]} ${clock}`;
+  return `${d.getDate()}/${d.getMonth() + 1} ${clock}`;
+}
+
 export function fmtAgo(ts, now) {
   const s = Math.max(0, Math.round((now - ts) / 1000));
   if (s < 45) return 'lige nu';

@@ -2,14 +2,14 @@
 // a look at the picture before it is shared. Photos taken here never land in the phone's camera
 // roll — they only exist inside the event. Where the browser can't open the camera directly, the
 // phone's own camera (or the camera roll) is used instead.
-import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, Icon, IconButton, Button, Spinner, cx } from '../kit.js';
+import { html, useState, useEffect, useLayoutEffect, useRef, useModalFocus, Icon, IconButton, Button, Spinner, cx } from '../kit.js';
 import { preparePhoto, bitmapFromFile, sharePhoto, PHOTO } from '../../app/photos.js';
 import { eventUi } from '../screens/event.js';
-import { prefs, toast } from '../ui-store.js';
+import { toast } from '../ui-store.js';
 import { sfx, haptic } from '../feedback.js';
 import { PhotoFrame } from './photo.js';
+import { useCameraStream, useSelfTimer, Countdown, FlashTool, TimerTool, FlipTool } from './stream.js';
 
-const TIMERS = [0, 3, 10];
 // Photos picked from the camera roll in one go.
 const MAX_PICK = 10;
 // Zooming by cropping the picture (where the camera can't zoom itself) stops at 3×, before it
@@ -17,49 +17,20 @@ const MAX_PICK = 10;
 const DIGITAL_MAX = 3;
 const zoomText = (z) => `${String(Math.round(z * 10) / 10).replace('.', ',')}×`;
 
-// zoom: true asks for the camera's own zoom where the browser offers it (Chrome on Android).
-function constraints(facing) {
-  return { audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 }, zoom: true } };
-}
-
-async function openStream(facing) {
-  const md = navigator.mediaDevices;
-  if (!md?.getUserMedia) throw Object.assign(new Error('unsupported'), { name: 'NotSupportedError' });
-  try {
-    return await md.getUserMedia(constraints(facing));
-  } catch (err) {
-    if (err?.name === 'OverconstrainedError') return md.getUserMedia({ audio: false, video: true });
-    throw err;
-  }
-}
-
-export function CameraOverlay({ room }) {
-  const open = useStore(eventUi, (s) => s.camera);
-  if (!open) return null;
-  return html`<${Camera} room=${room} onClose=${() => eventUi.set({ camera: false })} />`;
-}
-
-function Camera({ room, onClose }) {
+export function Camera({ room, onClose }) {
   const root = useRef(null);
   useModalFocus(root);
   const video = useRef(null);
-  const stream = useRef(null);
-  const [facing, setFacing] = useState(() => prefs.get().cameraFacing || 'environment');
-  const facingNow = useRef(facing);
-  facingNow.current = facing;
   const [lit, setLit] = useState(false); // the white screen that lights up a selfie
-  const [status, setStatus] = useState('starting'); // starting | live | denied | unavailable
   const [torch, setTorch] = useState({ can: false, on: false });
   const [flash, setFlash] = useState(false); // screen flash for the front camera
-  const [timer, setTimer] = useState(0);
-  const [count, setCount] = useState(0);
+  const selfTimer = useSelfTimer();
   const [shot, setShot] = useState(null); // { prepared, url }
   const [batch, setBatch] = useState(null); // several from the camera roll: [{ prepared, url }]
   const [progress, setProgress] = useState(null); // "3 af 8" while preparing or sharing them
   const [busy, setBusy] = useState(false);
   const [blink, setBlink] = useState(0);
   const [last, setLast] = useState(null);
-  const countdown = useRef(null);
   // Zoom: the camera's own where it has one ({ min, max }), otherwise by cropping the picture.
   const [zoom, setZoom] = useState(1);
   const [lens, setLens] = useState(null);
@@ -68,54 +39,15 @@ function Camera({ room, onClose }) {
   const lensNow = useRef(null);
   lensNow.current = lens;
 
-  const stop = () => {
-    stream.current?.getTracks().forEach((t) => t.stop());
-    stream.current = null;
-  };
-
-  const start = async (which = facingNow.current) => {
-    stop();
-    setStatus('starting');
-    try {
-      const s = await openStream(which);
-      stream.current = s;
-      const track = s.getVideoTracks()[0];
-      // Another app took the camera (or it was unplugged): say so and offer to try again.
-      if (track) track.onended = () => stream.current === s && setStatus('unavailable');
-      const caps = track?.getCapabilities?.() || {};
-      setTorch({ can: !!caps.torch, on: false });
-      const hw = caps.zoom?.max > 1 ? { min: Math.max(1, caps.zoom.min || 1), max: Math.min(8, caps.zoom.max) } : null;
-      setLens(hw);
-      lensNow.current = hw;
-      setZoom(1);
-      zoomNow.current = 1;
-      if (hw) track.applyConstraints({ advanced: [{ zoom: hw.min }] }).catch(() => {});
-      if (video.current) {
-        video.current.srcObject = s;
-        await video.current.play().catch(() => {});
-      }
-      setStatus('live');
-    } catch (err) {
-      setStatus(err?.name === 'NotAllowedError' || err?.name === 'SecurityError' ? 'denied' : 'unavailable');
-    }
-  };
-
-  useEffect(() => {
-    document.documentElement.classList.add('scroll-locked', 'media-open');
-    start();
-    // Let go of the camera while the app is in the background.
-    const onVis = () => {
-      if (document.visibilityState === 'hidden') stop();
-      else if (!stream.current) start();
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      document.removeEventListener('visibilitychange', onVis);
-      document.documentElement.classList.remove('scroll-locked', 'media-open');
-      clearInterval(countdown.current);
-      stop();
-    };
-  }, []);
+  const { status, facing, start, flip, track: liveTrack } = useCameraStream(video, (track, caps) => {
+    setTorch({ can: !!caps.torch, on: false });
+    const hw = caps.zoom?.max > 1 ? { min: Math.max(1, caps.zoom.min || 1), max: Math.min(8, caps.zoom.max) } : null;
+    setLens(hw);
+    lensNow.current = hw;
+    setZoom(1);
+    zoomNow.current = 1;
+    if (hw) track.applyConstraints({ advanced: [{ zoom: hw.min }] }).catch(() => {});
+  });
 
   useEffect(() => () => shot?.url && URL.revokeObjectURL(shot.url), [shot]);
 
@@ -128,19 +60,12 @@ function Camera({ room, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const flip = () => {
-    const next = facing === 'user' ? 'environment' : 'user';
-    setFacing(next);
-    prefs.set({ cameraFacing: next });
-    start(next);
-  };
-
   // The camera's own zoom takes a moment per change: send only the latest one while it works.
   const lensBusy = useRef(false);
   const lensWant = useRef(1);
   const zoomLens = (z) => {
     lensWant.current = z;
-    const track = stream.current?.getVideoTracks()[0];
+    const track = liveTrack();
     if (lensBusy.current || !track || !lensNow.current) return;
     lensBusy.current = true;
     track
@@ -201,7 +126,7 @@ function Camera({ room, onClose }) {
   const toggleTorch = async () => {
     const on = !torch.on;
     try {
-      await stream.current?.getVideoTracks()[0]?.applyConstraints({ advanced: [{ torch: on }] });
+      await liveTrack()?.applyConstraints({ advanced: [{ torch: on }] });
       setTorch({ can: true, on });
     } catch {
       setTorch({ can: false, on: false });
@@ -236,31 +161,6 @@ function Camera({ room, onClose }) {
       setLit(false);
       setBusy(false);
     }
-  };
-
-  const shutter = () => {
-    if (count) {
-      clearInterval(countdown.current);
-      setCount(0);
-      return;
-    }
-    if (!timer) {
-      capture();
-      return;
-    }
-    let left = timer;
-    setCount(left);
-    countdown.current = setInterval(() => {
-      left -= 1;
-      if (left > 0) {
-        setCount(left);
-        sfx.tick();
-      } else {
-        clearInterval(countdown.current);
-        setCount(0);
-        capture();
-      }
-    }, 1000);
   };
 
   // A picture from the phone, ready to share (the decoded original is let go of at once).
@@ -376,7 +276,7 @@ function Camera({ room, onClose }) {
     ${status === 'live' && !reviewing ? html`<div class="camera__finder" aria-hidden="true" ...${finger}></div>` : null}
     ${blink ? html`<div class="camera__blink" key=${blink} aria-hidden="true"></div>` : null}
     ${lit ? html`<div class="camera__lit" aria-hidden="true"></div>` : null}
-    ${count ? html`<div class="camera__count" aria-live="assertive" key=${count}>${count}</div>` : null}
+    <${Countdown} count=${selfTimer.count} />
 
     <header class="camera__top">
       <${IconButton} icon="x" label="Luk kameraet" onClick=${onClose} />
@@ -384,22 +284,10 @@ function Camera({ room, onClose }) {
       ${status === 'live' && !reviewing
         ? html`
             ${torch.can || facing === 'user'
-              ? html`<button
-                  type="button"
-                  class=${cx('camera__tool', (torch.on || (flash && facing === 'user')) && 'is-on')}
-                  aria-pressed=${torch.can ? torch.on : flash}
-                  aria-label="Blitz"
-                  onClick=${() => (torch.can ? toggleTorch() : setFlash(!flash))}
-                >
-                  <${Icon} name="zap" size=${20} />
-                </button>`
+              ? html`<${FlashTool} on=${torch.can ? torch.on : flash} onClick=${() => (torch.can ? toggleTorch() : setFlash(!flash))} />`
               : null}
-            <button type="button" class=${cx('camera__tool', timer && 'is-on')} aria-label=${`Selvudløser: ${timer ? `${timer} sekunder` : 'fra'}`} onClick=${() => setTimer(TIMERS[(TIMERS.indexOf(timer) + 1) % TIMERS.length])}>
-              <${Icon} name="timer" size=${20} />${timer ? html`<small>${timer}s</small>` : null}
-            </button>
-            <button type="button" class="camera__tool" aria-label=${facing === 'user' ? 'Skift til bagkameraet' : 'Skift til selfie-kameraet'} onClick=${flip}>
-              <${Icon} name="switch-camera" size=${20} />
-            </button>`
+            <${TimerTool} timer=${selfTimer.timer} onClick=${selfTimer.next} />
+            <${FlipTool} facing=${facing} onClick=${flip} />`
         : null}
     </header>
 
@@ -424,7 +312,14 @@ function Camera({ room, onClose }) {
               : null}
             <div class="camera__controls">
               ${filePicker('', 'image', { name: 'Vælg fra kamerarullen' })}
-              <button type="button" data-autofocus class=${cx('camera__shutter', count && 'is-counting')} aria-label=${count ? 'Stop selvudløseren' : 'Tag billede'} onClick=${shutter} disabled=${status !== 'live' || busy}>
+              <button
+                type="button"
+                data-autofocus
+                class=${cx('camera__shutter', selfTimer.count && 'is-counting')}
+                aria-label=${selfTimer.count ? 'Stop selvudløseren' : 'Tag billede'}
+                onClick=${() => selfTimer.press(capture)}
+                disabled=${status !== 'live' || busy}
+              >
                 <span></span>
               </button>
               ${last

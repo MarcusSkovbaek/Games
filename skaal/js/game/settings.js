@@ -21,6 +21,9 @@ export function defaultSettings() {
     tourSongAll: false,
     // Guests can take photos in the app (see game/photos.js).
     photos: true,
+    // The disposable camera: nobody sees what they shoot, 23 shots each, and the photos develop
+    // 24 hours after they were taken (see DISPOSABLE in game/photos.js).
+    disposable: false,
   };
 }
 
@@ -51,6 +54,7 @@ export function normalizeSettings(raw) {
     tourSong: cleanSongUrl(s.tourSong),
     tourSongAll: bool(s.tourSongAll, def.tourSongAll),
     photos: bool(s.photos, def.photos),
+    disposable: bool(s.disposable, def.disposable),
   };
 }
 

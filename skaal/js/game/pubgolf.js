@@ -11,7 +11,8 @@
 //   pgbon   { p | team, n, why }   n strokes off                              — officials
 //   team    { p, team }            p plays for team (null = no team)          — p or an official
 //   hole    { h }                  the group moves on to hole h               — officials
-//   podium  { c, places | photos } result of competition c                   — officials
+//   podium  { c, places | photos } result of competition c (the photo competition can also be
+//                                  decided after the end)                    — officials
 //   pgcomp  { c }                  competition c starts (pops up on every phone) — officials
 //   pgvis   { show }               whether players see the competitions before they start
 //                                  (default yes; the latest one counts)       — officials
@@ -278,6 +279,8 @@ export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, 
   for (const { pid, e } of list('podium')) {
     const comp = compById.get(e.c);
     if (!officialAt(pid, e.ts) || !comp) continue;
+    // After the end only the photo competition can be decided (its photos may still be developing).
+    if (meta.ended && e.ts > meta.ended && comp.kind !== 'photo') continue;
     let places;
     if (comp.kind === 'photo' && Array.isArray(e.photos)) {
       places = [0, 1, 2].map((i) => {

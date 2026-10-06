@@ -9,6 +9,7 @@ import { randomCode, randomId } from '../../core/ids.js';
 import { now } from '../../core/clock.js';
 import { openEvent, rememberEvent } from '../../app/session.js';
 import { showCompetitions } from '../../app/actions.js';
+import { DISPOSABLE_HINT } from '../photos/host.js';
 import { fmtPoints } from '../format.js';
 import { navigate } from '../router.js';
 import { toast } from '../ui-store.js';
@@ -76,7 +77,7 @@ export function Create() {
       const room = await openEvent(code);
       const t = now();
       // Pub golf has no drink tracker, wheels or automatic breakers — minigames are started by hand.
-      const eventSettings = golf ? normalizeSettings({ ...defaultSettings(), breakerMin: 0, triggers: false }) : settings;
+      const eventSettings = golf ? normalizeSettings({ ...defaultSettings(), breakerMin: 0, triggers: false, disposable: settings.disposable }) : settings;
       room.setMeta({
         name: clean,
         hostId: room.pid,
@@ -162,6 +163,18 @@ export function Create() {
             </div>`
         : null}
       ${golf ? null : html`<${PartyOptions} settings=${settings} update=${update} />`}
+
+      <div class="field">
+        <span class="field__label">Fotos</span>
+        <div class="card option-card">
+          <${Switch}
+            label="🎞️ Engangskamera"
+            hint=${`${DISPOSABLE_HINT}. Kan slås til og fra undervejs.`}
+            checked=${settings.disposable}
+            onChange=${(disposable) => update({ disposable })}
+          />
+        </div>
+      </div>
 
       ${error ? html`<div class="form-error" role="alert"><${Icon} name="info" size=${18} />${error}</div>` : null}
       <${Button} type="submit" size="lg" block loading=${busy} iconRight="chevron-right">${golf ? 'Opret pub golf' : 'Opret event'}<//>

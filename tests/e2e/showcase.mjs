@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { setup } from './lib.mjs';
-import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin, createPubGolf, joinPubGolf, pickPhoto } from './helpers.mjs';
+import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin, createPubGolf, joinPubGolf, pickPhoto, shootDisposable } from './helpers.mjs';
 
 const OUT = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -310,6 +310,22 @@ try {
   }
   await wait(800);
   await save(golfTv.page, '19-pubgolf-storskaerm');
+
+  // The disposable camera: shots nobody sees until they develop, a day later.
+  const dispo = await createEvent(env, { name: 'Fødselsdag hos Ida', host: 'Ida', disposable: true, breakers: false, photo: await photoOf(env.browser, '🌸', '#fbc2eb,#a6c1ee') });
+  const kim = await joinEvent(env, dispo.code, 'Kim', await photoOf(env.browser, '🐯', '#f6d365,#fda085'));
+  await shootDisposable(kim, 3);
+  await shootDisposable(dispo.ph, 2);
+  await kim.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+  await kim.page.waitForFunction(() => document.querySelector('.dispo__shutter')?.disabled === false, null, { timeout: 10000 });
+  await wait(600);
+  await save(kim.page, '25-engangskamera');
+  await kim.page.getByRole('button', { name: 'Luk kameraet' }).click();
+  await fastForward([dispo.ph, kim], 24 * 3600_000 + 5000);
+  await tab(kim, 'Feed');
+  await kim.page.waitForFunction(() => document.querySelectorAll('.feed-set .feed-photo').length === 5, null, { timeout: 10000 });
+  await wait(5500); // let the photos load and the toasts fade
+  await save(kim.page, '26-fremkaldt');
   console.log('screenshots written to docs/screenshots/');
 } finally {
   await env.teardown();

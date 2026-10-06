@@ -6,7 +6,7 @@ import { toast } from '../ui-store.js';
 import { sfx } from '../feedback.js';
 import { eventUi } from '../screens/event.js';
 import { PhotoThumb, PhotoGrid, PlayButton } from '../photos/photo.js';
-import { CameraCard } from '../photos/layer.js';
+import { CameraCard, DevelopCard } from '../photos/layer.js';
 import { MEDALS } from './common.js';
 
 export const photoComp = (pg) => pg.comps.find((c) => c.kind === 'photo');
@@ -46,18 +46,26 @@ export function PhotosTab({ room, d }) {
       : null}
 
     <${CameraCard} room=${room} d=${d} text=${comp ? 'Alle i eventet kan se det — de bedste kan vinde fotokonkurrencen' : null} />
+    <${DevelopCard} room=${room} d=${d} />
 
     ${d.photos.length
       ? html`<${PlayButton} d=${d} label="Afspil runden" /><${PhotoGrid} room=${room} d=${d} photos=${d.photos} badge=${badge} />`
-      : html`<${Empty}
-          icon="camera"
-          title="Ingen billeder endnu"
-          text=${comp ? 'Tag det første billede — de bedste kan vinde fotokonkurrencen.' : 'Tag det første billede fra runden — alle i eventet kan se det.'}
-        />`}
+      : d.undeveloped.length || d.settings.disposable
+        ? html`<${Empty}
+            icon="camera"
+            title=${d.undeveloped.length ? 'Ingen billeder fremkaldt endnu' : 'Ingen billeder endnu'}
+            text=${`Billeder fra engangskameraet dukker op her, når de er fremkaldt — 24 timer efter, de er taget.${comp ? ' Så kårer dommeren de bedste i fotokonkurrencen.' : ''}`}
+          />`
+        : html`<${Empty}
+            icon="camera"
+            title="Ingen billeder endnu"
+            text=${comp ? 'Tag det første billede — de bedste kan vinde fotokonkurrencen.' : 'Tag det første billede fra runden — alle i eventet kan se det.'}
+          />`}
   </div>`;
 }
 
-// Below a photo in the viewer: its team and place — and, for the judge, the podium buttons.
+// Below a photo in the viewer: its team and place — and, for the judge, the podium buttons (also
+// after the end, when photos from the disposable camera may only just have developed).
 export function PhotoPlaces({ room, d, photo }) {
   const pg = d.pg;
   const comp = photoComp(pg);
@@ -79,7 +87,7 @@ export function PhotoPlaces({ room, d, photo }) {
           ${place >= 0 ? html`<span class="viewer__medal">${MEDALS[place]} ${place + 1}.-plads i ${comp.name.toLowerCase()}</span>` : null}
         </div>`
       : null}
-    ${pg.isJudge && !d.ended
+    ${pg.isJudge
       ? html`<div class="viewer__places" role="group" aria-label=${comp.name}>
           ${MEDALS.map(
             (m, i) => html`<button type="button" class=${cx('chip', place === i && 'is-active')} aria-pressed=${place === i} onClick=${() => set(i)}>${m} ${i + 1}.-plads</button>`,

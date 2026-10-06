@@ -9,11 +9,13 @@ export async function photoOf(browser, emoji, colors) {
   return buf;
 }
 
-export async function createEvent(env, { name = 'Fredagsbar hos Mads', host = 'Mads', photo } = {}) {
+export async function createEvent(env, { name = 'Fredagsbar hos Mads', host = 'Mads', photo, disposable, breakers = true } = {}) {
   const ph = await env.phone(host);
   const p = ph.page;
   await p.goto(env.appUrl('#/ny'));
   await p.fill('input[placeholder^="Fx Fredagsbar"]', name);
+  if (!breakers) await p.locator('.chip', { hasText: /^Fra$/ }).click();
+  if (disposable) await p.locator('.switch-row', { hasText: 'Engangskamera' }).click();
   await p.getByRole('button', { name: 'Opret event' }).click();
   await p.waitForSelector('.event-preview', { timeout: 15000 });
   if (photo) await setPhoto(p, photo);
@@ -46,13 +48,14 @@ export async function joinEvent(env, code, name, photo) {
 }
 
 // A pub golf event: the host picks the type, names the first bars and joins a team.
-export async function createPubGolf(env, { name = 'Pub golf på Vesterbro', host = 'Mads', bars = [], team, photo } = {}) {
+export async function createPubGolf(env, { name = 'Pub golf på Vesterbro', host = 'Mads', bars = [], team, photo, disposable } = {}) {
   const ph = await env.phone(host);
   const p = ph.page;
   await p.goto(env.appUrl('#/ny'));
   await p.getByRole('radio', { name: /Pub golf/ }).click();
   await p.fill('input[placeholder^="Fx Pub golf"]', name);
   for (const [i, bar] of bars.entries()) await p.fill(`input[aria-label="Bar på hul ${i + 1}"]`, bar);
+  if (disposable) await p.locator('.switch-row', { hasText: 'Engangskamera' }).click();
   await p.getByRole('button', { name: 'Opret pub golf' }).click();
   await p.waitForSelector('.event-preview', { timeout: 15000 });
   if (photo) await setPhoto(p, photo);
@@ -85,6 +88,22 @@ export async function takePhoto(ph, caption = '') {
   await ph.page.waitForSelector('.camera__video.is-on', { timeout: 10000 });
   await ph.page.getByRole('button', { name: 'Tag billede', exact: true }).click();
   await sharePhotoFromReview(ph, caption);
+  await ph.page.getByRole('button', { name: 'Luk kameraet' }).click();
+  await ph.page.waitForSelector('.camera', { state: 'detached' });
+}
+
+// The disposable camera (open already, or opened from the top bar): n blind shots — nothing to
+// look at, nothing to review.
+export async function shootDisposable(ph, n = 1, { open = true } = {}) {
+  if (open) await ph.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+  const ready = () => ph.page.waitForFunction(() => document.querySelector('.dispo__shutter')?.disabled === false, null, { timeout: 10000 });
+  await ready();
+  for (let i = 0; i < n; i++) {
+    const before = await ph.page.evaluate(() => window.__skaal.derived().shotsUsed);
+    await ph.page.locator('.dispo__shutter').click();
+    await ph.page.waitForFunction((b) => window.__skaal.derived().shotsUsed > b, before, { timeout: 10000 });
+    if (before < 22) await ready();
+  }
   await ph.page.getByRole('button', { name: 'Luk kameraet' }).click();
   await ph.page.waitForSelector('.camera', { state: 'detached' });
 }

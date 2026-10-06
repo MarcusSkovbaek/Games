@@ -8,7 +8,7 @@ import { fmtAgo } from '../format.js';
 import { haptic } from '../feedback.js';
 import { FeedPhoto, FeedPhotoSet, PhotoGrid, PlayButton } from '../photos/photo.js';
 import { FeedComments, CommentButton } from '../photos/comments.js';
-import { CameraCard } from '../photos/layer.js';
+import { CameraCard, DevelopCard } from '../photos/layer.js';
 import { eventUi } from './event.js';
 
 // ❤️ is also the like in the photo viewer, so likes given there show here too.
@@ -45,8 +45,9 @@ function glyphFor(item) {
     case 'pgpodium':
       return '🏆';
     case 'photo':
+      return item.photo.ds ? '🎞️' : '📸';
     case 'photos':
-      return '📸';
+      return item.photos[0].ds ? '🎞️' : '📸';
     case 'pgchal':
       return '🎲';
     case 'pgcomp':
@@ -120,6 +121,7 @@ export function FeedTab({ room, d }) {
       <span class="faint" style=${{ fontSize: '13px' }}>${items.length} hændelser · ${photos.length} ${photos.length === 1 ? 'billede' : 'billeder'}</span>
     </div>
     <${CameraCard} room=${room} d=${d} />
+    <${DevelopCard} room=${room} d=${d} />
     <${Segmented}
       options=${[
         { value: 'all', label: 'Alt' },
@@ -131,7 +133,13 @@ export function FeedTab({ room, d }) {
     ${view === 'photos'
       ? photos.length
         ? html`<${PlayButton} d=${d} /><${PhotoGrid} room=${room} d=${d} photos=${photos} />`
-        : html`<${Empty} icon="camera" title="Ingen billeder endnu" text="Tag det første billede fra aftenen — det dukker op her og i feedet hos alle." />`
+        : html`<${Empty}
+            icon="camera"
+            title=${d.undeveloped.length ? 'Ingen billeder fremkaldt endnu' : 'Ingen billeder endnu'}
+            text=${d.undeveloped.length || d.settings.disposable
+              ? 'Billeder fra engangskameraet dukker op her og i feedet hos alle, når de er fremkaldt — 24 timer efter, de er taget.'
+              : 'Tag det første billede fra aftenen — det dukker op her og i feedet hos alle.'}
+          />`
       : items.length
         ? html`<div class="card" style=${{ padding: '2px 14px' }}>
             <div class="feed">${items.slice(0, limit).map((item) => html`<${FeedRow} key=${item.key} room=${room} d=${d} item=${item} />`)}</div>

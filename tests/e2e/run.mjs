@@ -21,6 +21,7 @@ import {
   joinPubGolf,
   takePhoto,
   pickPhoto,
+  shootDisposable,
 } from './helpers.mjs';
 import { startBroker } from '../support/broker.mjs';
 
@@ -1042,6 +1043,122 @@ const scenarios = {
     // (Connection errors while the broker was down are expected.)
     const ignore = (ph) => ({ ...ph, errors: ph.errors.filter((e) => !e.includes('WebSocket connection')) });
     assertNoErrors([...all, tv, late, denied, old].map(ignore));
+  },
+
+  async 'disposable camera: blind shots, 23 each, developed for everyone a day later — party and pub golf'(env) {
+    const axeSource = readFileSync(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8');
+    const DAY = 24 * 3600_000;
+    const { ph: host, code } = await createEvent(env, { disposable: true, breakers: false });
+    const anna = await joinEvent(env, code, 'Anna');
+    const bo = await joinEvent(env, code, 'Bo');
+    const all = [host, anna, bo];
+    assert.equal(await derived(anna, (d) => d.settings.disposable), true, 'turned on when the event was made');
+    const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1 });
+    await tv.page.goto(env.appUrl(`#/tv/${code}`));
+    await tv.page.waitForSelector('.tv-photo-hint');
+    assert.match(await tv.page.locator('.tv-photo-hint').textContent(), /engangskameraet/);
+
+    // Anna opens the disposable camera: the camera runs, but its picture is covered up — and there
+    // is no camera roll, zoom or last photo to look at.
+    await tab(anna, 'Feed');
+    assert.match(await anna.page.locator('.camera-card').textContent(), /Engangskamera.*23 billeder tilbage/);
+    await anna.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+    await anna.page.waitForFunction(() => document.querySelector('.dispo__shutter')?.disabled === false, null, { timeout: 10000 });
+    const view = await anna.page.evaluate(() => {
+      const v = document.querySelector('.dispo .camera__video');
+      const r = v.getBoundingClientRect();
+      const spots = [0.2, 0.5, 0.8].flatMap((x) => [0.15, 0.5, 0.85].map((y) => document.elementFromPoint(r.left + r.width * x, r.top + r.height * y)));
+      return { playing: v.videoWidth > 0 && !v.paused, covered: spots.every((el) => el && el !== v && !!el.closest('.dispo')) };
+    });
+    assert.deepEqual(view, { playing: true, covered: true }, 'the picture is there to take photos with, but nobody sees it');
+    assert.equal(await anna.page.locator('.dispo input[type=file], .camera__zoom, .camera__last, .camera__finder').count(), 0);
+    assert.equal(await anna.page.locator('.dispo__digits').textContent(), '23');
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the disposable camera is accessible');
+    await shot(anna.page, 'e2e-disposable-camera');
+    await anna.page.locator('.dispo__shutter').click();
+    await anna.page.waitForFunction(() => document.querySelector('.dispo__digits')?.textContent === '22', null, { timeout: 10000 });
+    assert.match(await anna.page.locator('.dispo__window').textContent(), /Klik!.*Fremkaldes i morgen kl\. \d\d:\d\d/);
+    assert.equal(await anna.page.locator('.camera__review').count(), 0, 'no second look');
+    assert.equal(await anna.page.locator('.dispo__film i.is-used').count(), 1);
+    await shot(anna.page, 'e2e-disposable-click');
+    await anna.page.getByRole('button', { name: 'Luk kameraet' }).click();
+
+    // Nobody sees it yet — Anna neither — but everyone can see that a photo is developing.
+    for (const ph of all) {
+      await ph.page.waitForFunction(() => window.__skaal.derived().undeveloped.length === 1, null, { timeout: 8000 });
+      assert.equal(await derived(ph, (d) => d.photos.length), 0);
+    }
+    await tab(bo, 'Feed');
+    await bo.page.waitForSelector('.develop-card');
+    assert.match(await bo.page.locator('.develop-card').textContent(), /Et billede til fremkaldelse.*klar i morgen kl\./);
+    assert.equal(await bo.page.locator('.feed-photo').count(), 0);
+    assert.match(await anna.page.locator('.develop-card').textContent(), /det er dit/);
+    await tv.page.waitForFunction(() => /til fremkaldelse/.test(document.querySelector('.tv-photo-hint')?.textContent || ''), null, { timeout: 8000 });
+    assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'the feed with a photo developing is accessible');
+    await shot(bo.page, 'e2e-disposable-developing');
+
+    // 23 shots each: Bo uses up his film.
+    await shootDisposable(bo, 23);
+    await bo.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+    await bo.page.waitForSelector('.dispo__counter.is-empty', { timeout: 10000 });
+    assert.equal(await bo.page.locator('.dispo__shutter').isDisabled(), true);
+    assert.match(await bo.page.locator('.dispo__window').textContent(), /Filmen er brugt op/);
+    await shot(bo.page, 'e2e-disposable-empty');
+    await bo.page.getByRole('button', { name: 'Luk kameraet' }).click();
+    assert.match(await bo.page.locator('.camera-card').textContent(), /Filmen er brugt op/);
+    await host.page.waitForFunction(() => window.__skaal.derived().undeveloped.length === 24, null, { timeout: 15000 });
+
+    // A day later they develop — for everyone at once, Anna's own included.
+    await fastForward([...all, tv], DAY + 5000);
+    for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 24, null, { timeout: 8000 });
+    await bo.page.waitForSelector('.toast:has-text("af dine billeder er fremkaldt")', { timeout: 8000 });
+    await anna.page.waitForSelector('.toast:has-text("fra Bo er fremkaldt")', { timeout: 8000 });
+    assert.equal(await anna.page.locator('.develop-card').count(), 0);
+    assert.match(await anna.page.locator('.feed-item').first().textContent(), /Bo fik fremkaldt 11 billeder fra engangskameraet \(taget i går kl\. \d\d:\d\d\)/);
+    await anna.page.locator('.feed-item', { hasText: 'Du fik fremkaldt et billede' }).locator('.feed-photo').click();
+    await anna.page.waitForSelector('.viewer');
+    assert.match(await anna.page.locator('.viewer__who small').textContent(), /🎞️ taget i går kl\./);
+    await anna.page.waitForFunction(() => /blob:/.test(document.querySelector('.viewer__photo')?.style.backgroundImage || ''), null, { timeout: 10000 });
+    await shot(anna.page, 'e2e-disposable-developed');
+    await anna.page.getByRole('button', { name: 'Luk', exact: true }).click();
+    await tv.page.waitForSelector('.tv-photo', { timeout: 8000 });
+
+    // The host turns the disposable camera off: photos are shared at once again.
+    await tab(host, 'Mig');
+    await host.page.locator('.switch-row', { hasText: 'Engangskamera' }).click();
+    await anna.page.waitForFunction(() => !window.__skaal.derived().settings.disposable, null, { timeout: 8000 });
+    await takePhoto(anna, 'Morgenkaffe');
+    for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 25, null, { timeout: 8000 });
+
+    // Pub golf: the players shoot the photo competition blind, and the judge decides it once the
+    // photos have developed — after the round has ended.
+    const { ph: ida, code: golf } = await createPubGolf(env, { host: 'Ida', team: 'Hold Blå', disposable: true });
+    const kim = await joinPubGolf(env, golf, 'Kim', { team: 'Hold Rød' });
+    assert.equal(await derived(kim, (d) => d.settings.disposable), true);
+    await tab(ida, 'Konkurrencer');
+    await ida.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).getByRole('button', { name: 'Start', exact: true }).click();
+    await ida.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Start', exact: true }).click();
+    await kim.page.waitForSelector('.pg-moment', { timeout: 6000 });
+    assert.match(await kim.page.locator('.pg-moment__sub').textContent(), /engangskameraet/);
+    await kim.page.locator('.pg-moment').getByRole('button', { name: 'Tag et billede' }).click();
+    await shootDisposable(kim, 1, { open: false });
+    await tab(kim, 'Fotos');
+    await kim.page.waitForSelector('.develop-card');
+    assert.equal(await kim.page.locator('.photo-tile').count(), 0);
+    await tab(kim, 'Konkurrencer');
+    assert.match(await kim.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).textContent(), /fremkaldes 24 timer efter/);
+    await tab(ida, 'Mig');
+    await ida.page.getByRole('button', { name: /Afslut runden/ }).click();
+    await ida.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Afslut', exact: true }).click();
+    await kim.page.waitForFunction(() => window.__skaal.derived().ended > 0, null, { timeout: 6000 });
+    await fastForward([ida, kim], DAY + 5000);
+    await ida.page.waitForFunction(() => window.__skaal.derived().photos.length === 1, null, { timeout: 8000 });
+    await tab(ida, 'Fotos');
+    await ida.page.locator('.photo-tile').first().click();
+    await ida.page.locator('.viewer__places').getByRole('button', { name: /🥇 1\.-plads/ }).click();
+    await kim.page.waitForFunction(() => window.__skaal.derived().pg.results.get('photo')?.places[0]?.pid === window.__skaal.derived().me, null, { timeout: 8000 });
+    assert.deepEqual(await derived(kim, (d) => d.pg.teams.map((tm) => [tm.name, tm.bon])), [['Hold Rød', 3], ['Hold Blå', 0]], 'the photo podium counts after the end');
+    assertNoErrors([...all, tv, ida, kim]);
   },
 
   async 'resilience: offline logging, broker restart healing, continue on new phone, leave'(env) {
