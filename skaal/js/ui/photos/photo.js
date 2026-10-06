@@ -8,7 +8,7 @@ import { toggleReaction } from '../../app/actions.js';
 import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
 import { sfx, haptic } from '../feedback.js';
-import { fmtAgo } from '../format.js';
+import { fmtAgo, fmtClock } from '../format.js';
 
 export const LIKE = '❤️';
 export const likesOf = (d, key) => d.reactions.get(key)?.get(LIKE)?.size || 0;
@@ -145,17 +145,35 @@ export function PhotoGrid({ room, d, photos, badge }) {
   return html`<div class="photo-grid">${photos.map((ph) => html`<${PhotoTile} key=${ph.key} room=${room} d=${d} photo=${ph} badge=${badge} />`)}</div>`;
 }
 
+// The evening as a slideshow: every photo in the order they were taken, a few seconds each.
+export const playEvening = (d) => {
+  const first = d.photos[d.photos.length - 1];
+  if (first) eventUi.set({ photo: first.key, show: true });
+};
+
+export function PlayButton({ d, label = 'Afspil aftenen' }) {
+  if (d.photos.length < 2) return null;
+  return html`<${Button} variant="secondary" block icon="play" onClick=${() => playEvening(d)}>${label}<//>`;
+}
+
 // Full screen, one photo at a time; swipe (or arrow keys) for the next. `extra(photo)` adds
-// controls (the pub golf judge's podium buttons).
+// controls (the pub golf judge's podium buttons). In a slideshow (eventUi.show) the photos come
+// in the order they were taken; holding a finger on the photo or zooming in pauses it.
 export function PhotoViewer({ room, d, extra }) {
   const key = useStore(eventUi, (s) => s.photo);
+  const show = useStore(eventUi, (s) => !!s.show);
   const photos = d.photos;
   const index = photos.findIndex((ph) => ph.key === key);
   const photo = index >= 0 ? photos[index] : null;
   const [confirm, setConfirm] = useState(false);
+  const [held, setHeld] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
   const root = useRef(null);
   useModalFocus(root, !!photo);
-  const close = () => eventUi.set({ photo: null });
+  const close = () => {
+    eventUi.set({ photo: null, show: false });
+    setConfirm(false);
+  };
   const go = (step) => {
     const next = photos[index + step];
     if (next) {
@@ -193,6 +211,27 @@ export function PhotoViewer({ room, d, extra }) {
       if (near?.full) loadFull(room, near);
     }
   }, [index]);
+  // Keep the screen on while the slideshow plays.
+  const playing = show && !!photo;
+  useEffect(() => {
+    if (!playing) return undefined;
+    let lock = null;
+    let live = true;
+    const take = () => {
+      if (document.visibilityState !== 'visible') return;
+      navigator.wakeLock
+        ?.request('screen')
+        .then((l) => (live ? (lock = l) : l.release()))
+        .catch(() => {});
+    };
+    take();
+    document.addEventListener('visibilitychange', take);
+    return () => {
+      live = false;
+      document.removeEventListener('visibilitychange', take);
+      lock?.release?.().catch(() => {});
+    };
+  }, [playing]);
 
   const thumb = useThumb(room, photo, !!photo);
   const full = useFullPhoto(room, photo, !!photo);
@@ -213,16 +252,36 @@ export function PhotoViewer({ room, d, extra }) {
     toast(mine ? 'Billedet er slettet for alle' : 'Billedet er skjult for alle', { icon: '🗑️' });
     setConfirm(false);
   };
-  return html`<div class="viewer" ref=${root} tabindex="-1" role="dialog" aria-modal="true" aria-label=${photoLabel(d, photo)} onContextMenu=${block}>
+  // The slideshow moves on to the next photo in time (the one before it in the list).
+  const later = photos[index - 1];
+  const advance = () => {
+    if (later) eventUi.set({ photo: later.key });
+    else {
+      eventUi.set({ show: false });
+      toast('Det var alle billederne indtil nu 🎉', { key: 'show' });
+    }
+  };
+  const play = () => {
+    if (show) eventUi.set({ show: false });
+    // From the newest photo, the evening starts over from the first one.
+    else eventUi.set({ show: true, photo: later ? photo.key : photos[photos.length - 1].key });
+  };
+  const running = show && !held && !zoomed && !confirm && !!(full.url || full.failed);
+  return html`<div class=${cx('viewer', show && 'is-show')} ref=${root} tabindex="-1" role="dialog" aria-modal="true" aria-label=${photoLabel(d, photo)} onContextMenu=${block}>
+    ${show
+      ? html`<div class="viewer__progress" aria-hidden="true">
+          <i key=${photo.key} class=${running ? null : 'is-paused'} onAnimationEnd=${advance}></i>
+        </div>`
+      : null}
     <header class="viewer__top">
       <${Avatar} player=${p} size=${36} />
       <span class="viewer__who">
         <strong>${mine ? 'Dig' : p?.name || 'En gæst'}</strong>
-        <small>${fmtAgo(photo.ts, d.t)} · ${index + 1} af ${photos.length}</small>
+        <small>${show ? `kl. ${fmtClock(photo.ts)}` : `${fmtAgo(photo.ts, d.t)} · ${index + 1} af ${photos.length}`}</small>
       </span>
       <${IconButton} icon="x" label="Luk" onClick=${close} data-autofocus />
     </header>
-    <${ZoomStage} photoKey=${photo.key} src=${full.url || thumb.url} label=${photoLabel(d, photo)} onStep=${go} onClose=${close}>
+    <${ZoomStage} photoKey=${photo.key} src=${full.url || thumb.url} label=${photoLabel(d, photo)} onStep=${go} onClose=${close} onHold=${setHeld} onZoom=${setZoomed}>
       ${!full.url && !full.failed ? html`<span class="viewer__loading"><${Spinner} size=${30} /></span>` : null}
       ${full.failed ? html`<span class="viewer__note">Fuld størrelse er ikke tilgængelig lige nu — du ser en mindre udgave.</span>` : null}
       ${index > 0 ? html`<button type="button" class="viewer__nav viewer__nav--prev" aria-label="Forrige billede" onClick=${() => go(-1)}><${Icon} name="chevron-left" size=${26} /></button>` : null}
@@ -240,6 +299,11 @@ export function PhotoViewer({ room, d, extra }) {
             <button type="button" class=${cx('viewer__like', liked && 'is-on')} aria-pressed=${liked} onClick=${like}>
               <span aria-hidden="true">${LIKE}</span> ${likes || ''}<span class="sr-only">${liked ? 'Fjern like' : 'Like'}</span>
             </button>
+            ${photos.length > 1
+              ? html`<button type="button" class="viewer__action" aria-pressed=${show} onClick=${play}>
+                  <${Icon} name=${show ? 'pause' : 'play'} size=${18} />${show ? 'Pause' : 'Afspil'}
+                </button>`
+              : null}
             <span class="spacer"></span>
             ${canRemove
               ? html`<button type="button" class="viewer__action" onClick=${() => setConfirm(true)}><${Icon} name=${mine ? 'trash' : 'eye'} size=${18} />${mine ? 'Slet' : 'Skjul'}</button>`
@@ -256,13 +320,15 @@ const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 // The photo in the viewer: swipe for the next one, double-tap or pinch to zoom, drag to look
 // around while zoomed (on a computer: double-click, ctrl/⌘ + scroll, or + / − / 0).
-function ZoomStage({ photoKey, src, label, onStep, onClose, children }) {
+function ZoomStage({ photoKey, src, label, onStep, onClose, onHold, onZoom, children }) {
   const [view, setView] = useState(RESET);
   const stage = useRef(null);
   const pointers = useRef(new Map());
   const gesture = useRef(null);
   const lastTap = useRef(null);
   useEffect(() => setView(RESET), [photoKey]);
+  useEffect(() => onZoom?.(view.s > 1), [view.s > 1]);
+  useEffect(() => () => onHold?.(false), []);
 
   const box = () => {
     const r = stage.current.getBoundingClientRect();
@@ -298,6 +364,7 @@ function ZoomStage({ photoKey, src, label, onStep, onClose, children }) {
     if (e.target.closest('button') || (e.pointerType === 'mouse' && e.button !== 0)) return;
     stage.current.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    onHold?.(true);
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       gesture.current = { type: 'pinch', d0: dist(a, b) || 1, m0: mid(a, b), base: view };
@@ -325,6 +392,7 @@ function ZoomStage({ photoKey, src, label, onStep, onClose, children }) {
   const onUp = (e) => {
     if (!pointers.current.has(e.pointerId)) return;
     pointers.current.delete(e.pointerId);
+    if (!pointers.current.size) onHold?.(false);
     const g = gesture.current;
     if (pointers.current.size === 1 && g?.type === 'pinch') {
       // One finger stays down: carry on looking around from here.
@@ -361,6 +429,7 @@ function ZoomStage({ photoKey, src, label, onStep, onClose, children }) {
   const onCancel = (e) => {
     pointers.current.delete(e.pointerId);
     if (!pointers.current.size) {
+      onHold?.(false);
       gesture.current = null;
       setView((v) => ({ ...v, dx: 0, live: false }));
     }
@@ -409,6 +478,11 @@ export function PhotoOfTheNight({ room, d, onAll }) {
         ${likes ? html`<span class="potn__likes">${LIKE} ${likes}</span>` : null}
       </span>
     </button>
-    ${d.photos.length > 1 ? html`<${Button} variant="secondary" block icon="image" onClick=${onAll}>Se alle ${d.photos.length} billeder<//>` : null}
+    ${d.photos.length > 1
+      ? html`<div class="potn__actions">
+          <${Button} variant="secondary" icon="play" onClick=${() => playEvening(d)}>Afspil aftenen<//>
+          <${Button} variant="secondary" icon="image" onClick=${onAll}>Se alle ${d.photos.length}<//>
+        </div>`
+      : null}
   </section>`;
 }

@@ -6938,14 +6938,6 @@ button.pg-edit__emoji {
   text-overflow: ellipsis;
 }
 
-.pg-tv__nophoto {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  font-size: 18px;
-  color: var(--text-2);
-}
-
 .pg-tv__comps {
   display: flex;
   flex-direction: column;
@@ -7167,6 +7159,7 @@ button.pg-edit__emoji {
   height: 100%;
   object-fit: cover;
   opacity: 0;
+  transform: scale(var(--zoom, 1));
   transition: opacity 0.3s var(--ease);
 }
 
@@ -7175,7 +7168,34 @@ button.pg-edit__emoji {
 }
 
 .camera__video.is-mirrored {
-  transform: scaleX(-1);
+  transform: scale(var(--zoom, 1)) scaleX(-1);
+}
+
+/* Where the fingers pinch to zoom: everything between the top bar and the shutter. */
+.camera__finder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  touch-action: none;
+}
+
+.camera__zoom {
+  min-width: 48px;
+  height: 34px;
+  margin-bottom: 16px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.camera__zoom.is-on {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  color: var(--gold);
 }
 
 .camera__top {
@@ -7639,7 +7659,88 @@ button.pg-edit__emoji {
   gap: 8px;
 }
 
+/* Slideshow on the phone: a bar that fills while each photo is shown */
+.viewer__progress {
+  position: absolute;
+  top: calc(var(--safe-top) + 4px);
+  right: 12px;
+  left: 12px;
+  z-index: 2;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+
+.viewer__progress i {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transform-origin: left;
+  animation: show-progress 4.5s linear forwards;
+}
+
+.viewer__progress i.is-paused {
+  animation-play-state: paused;
+}
+
+@keyframes show-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* The bar is the slideshow's clock, so it keeps its pace with reduced motion too. */
+@media (prefers-reduced-motion: reduce) {
+  .viewer__progress i {
+    animation-duration: 4.5s !important;
+  }
+}
+
+.potn__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Side by side when they fit, one under the other on narrow phones. */
+.potn__actions .btn {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
 /* Big screen slideshow */
+.tv-photo-hint {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+  font-size: 18px;
+  color: var(--text-2);
+}
+
+.tv-photo-hint strong {
+  display: block;
+  color: var(--text);
+}
+
+.tv-photo-hint small {
+  font-size: 15px;
+}
+
+.tv-photo-hint__icon {
+  font-size: 36px;
+}
+
+.tv--pg .tv-photo-hint {
+  flex: 1;
+  justify-content: center;
+}
+
 .tv-photo {
   position: relative;
   flex: none;

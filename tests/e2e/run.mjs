@@ -668,6 +668,8 @@ const scenarios = {
     const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1 });
     await tv.page.goto(env.appUrl(`#/tv/${code}`));
     await tv.page.waitForSelector('.tv__board');
+    await tv.page.waitForSelector('.tv-photo-hint'); // until the first photo: a nudge to take one
+    await shot(tv.page, 'e2e-tv-photo-hint');
     await logDrink(bo, 'Øl', 1);
 
     // Anna takes a photo with the camera in the app.
@@ -675,6 +677,24 @@ const scenarios = {
     await anna.page.waitForSelector('.camera__video.is-on', { timeout: 10000 });
     assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the camera is accessible');
     await shot(anna.page, 'e2e-camera');
+    // Zoom: pinch the viewfinder, or tap the button for 2× (and back to 1×). This fake camera can't
+    // zoom itself, so the photo is the middle of the picture.
+    const zoom = () => anna.page.locator('.camera__zoom').textContent();
+    assert.equal((await zoom()).trim(), '1×');
+    await anna.page.evaluate(() => {
+      const el = document.querySelector('.camera__finder');
+      const fire = (type, id, x) => el.dispatchEvent(new PointerEvent(type, { pointerId: id, isPrimary: id === 1, clientX: x, clientY: 300, bubbles: true }));
+      fire('pointerdown', 1, 100);
+      fire('pointerdown', 2, 150);
+      fire('pointermove', 2, 175); // fingers 50 → 75 px apart: 1.5×
+      fire('pointerup', 1, 100);
+      fire('pointerup', 2, 175);
+    });
+    await anna.page.waitForFunction(() => document.querySelector('.camera__zoom').textContent.trim() === '1,5×');
+    await anna.page.locator('.camera__zoom').click();
+    await anna.page.waitForFunction(() => document.querySelector('.camera__zoom').textContent.trim() === '2×');
+    assert.equal(await anna.page.locator('.camera__video').evaluate((v) => v.style.getPropertyValue('--zoom')), '2');
+    const [vw, vh] = await anna.page.locator('.camera__video').evaluate((v) => [v.videoWidth, v.videoHeight]);
     await anna.page.getByRole('button', { name: 'Tag billede', exact: true }).click();
     await anna.page.waitForSelector('.camera__review');
     await anna.page.fill('.camera__form input', 'Skål fra baren! 🍻');
@@ -682,8 +702,9 @@ const scenarios = {
     await anna.page.getByRole('button', { name: 'Del med alle' }).click();
     await anna.page.waitForSelector('.camera__last:not(.is-empty)', { timeout: 10000 });
     await anna.page.getByRole('button', { name: 'Luk kameraet' }).click();
-    const first = await derived(anna, (d) => ({ key: d.photos[0].key, asset: d.photos[0].asset, full: d.photos[0].full, cap: d.photos[0].cap }));
+    const first = await derived(anna, (d) => ({ key: d.photos[0].key, asset: d.photos[0].asset, full: d.photos[0].full, cap: d.photos[0].cap, w: d.photos[0].w, h: d.photos[0].h }));
     assert.deepEqual([first.full, first.cap], [true, 'Skål fra baren! 🍻']);
+    assert.deepEqual([first.w, first.h], [Math.round(vw / 2), Math.round(vh / 2)], 'zoomed 2×: the middle of the picture');
 
     // Everyone gets a heads-up; Bo opens the photo from it and the full size is fetched.
     await bo.page.locator('.toast', { hasText: 'Anna delte et billede' }).getByRole('button', { name: 'Se' }).click();
@@ -838,10 +859,34 @@ const scenarios = {
     await host.page.getByRole('button', { name: /Afslut eventet/ }).click();
     await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Afslut event', exact: true }).click();
     await host.page.waitForSelector('.potn', { timeout: 8000 });
+    await host.page.locator('.potn__actions').scrollIntoViewIfNeeded();
+    await shot(host.page, 'e2e-photo-of-the-night');
     assert.match(await host.page.locator('.potn').textContent(), /Dennis.*❤️ 1/s);
     await host.page.locator('.potn').click();
     await host.page.waitForSelector('.viewer');
     assert.equal(await host.page.locator('.viewer__cap').textContent(), 'Fra kamerarullen');
+    await host.page.keyboard.press('Escape');
+    // The evening as a slideshow: every photo in the order they were taken, one after the other.
+    const caption = () => host.page.locator('.viewer__cap').textContent();
+    await host.page.getByRole('button', { name: 'Afspil aftenen' }).click();
+    await host.page.waitForSelector('.viewer.is-show .viewer__progress');
+    assert.equal(await caption(), 'Sidste runde', 'the slideshow starts with the first photo of the evening');
+    assert.match(await host.page.locator('.viewer__who small').textContent(), /^kl\. \d\d:\d\d$/);
+    assert.deepEqual(await axeViolations(host.page, axeSource), [], 'the slideshow is accessible');
+    await shot(host.page, 'e2e-slideshow');
+    // Holding a finger on the photo pauses it.
+    const show = await host.page.locator('.viewer__stage').boundingBox();
+    await host.page.mouse.move(show.x + show.width / 2, show.y + show.height / 2);
+    await host.page.mouse.down();
+    await host.page.waitForSelector('.viewer__progress i.is-paused');
+    await host.page.mouse.up();
+    await host.page.waitForSelector('.viewer__progress i:not(.is-paused)');
+    await host.page.waitForFunction(() => document.querySelector('.viewer__cap')?.textContent === 'Fra kamerarullen', null, { timeout: 12000 });
+    await host.page.keyboard.press('ArrowLeft'); // skip ahead to the newest
+    await host.page.waitForFunction(() => document.querySelector('.viewer__cap')?.textContent === 'Uden net');
+    await host.page.locator('.toast', { hasText: 'Det var alle billederne' }).waitFor({ timeout: 12000 });
+    await host.page.waitForSelector('.viewer:not(.is-show)');
+    assert.equal(await caption(), 'Uden net', 'the last photo stays on screen');
     await host.page.keyboard.press('Escape');
     await host.page.getByRole('button', { name: /Genåbn eventet/ }).click();
     await host.page.waitForSelector('.tabbar');

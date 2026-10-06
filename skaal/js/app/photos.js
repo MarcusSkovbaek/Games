@@ -24,18 +24,19 @@ export const PHOTO = {
 
 // ------------------------------------------------------------------------------ preparing
 
-function canvasFor(source, sw, sh, edge, mirror) {
-  const scale = Math.min(1, edge / Math.max(sw, sh));
+// The part { x, y, w, h } of the source, at most `edge` pixels on its longest side.
+function canvasFor(source, part, edge, mirror) {
+  const scale = Math.min(1, edge / Math.max(part.w, part.h));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(sw * scale));
-  canvas.height = Math.max(1, Math.round(sh * scale));
+  canvas.width = Math.max(1, Math.round(part.w * scale));
+  canvas.height = Math.max(1, Math.round(part.h * scale));
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
   if (mirror) {
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
   }
-  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, part.x, part.y, part.w, part.h, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 
@@ -52,15 +53,21 @@ async function jpeg(canvas, qualities, maxBytes) {
 }
 
 // Draws the picture again (which also drops EXIF data such as GPS position) as a full-size JPEG
-// and a thumbnail. `source` is a video element (the camera), an image bitmap or an image.
-export async function preparePhoto(source, { mirror = false } = {}) {
+// and a thumbnail. `source` is a video element (the camera), an image bitmap or an image; `zoom`
+// keeps only the middle of it.
+export async function preparePhoto(source, { mirror = false, zoom = 1 } = {}) {
   const sw = source.videoWidth || source.naturalWidth || source.width;
   const sh = source.videoHeight || source.naturalHeight || source.height;
   if (!sw || !sh) return null;
+  // Zoomed in (digitally): the middle of the picture.
+  const z = Math.min(4, Math.max(1, zoom || 1));
+  const part = { w: Math.round(sw / z), h: Math.round(sh / z) };
+  part.x = Math.round((sw - part.w) / 2);
+  part.y = Math.round((sh - part.h) / 2);
   let full = null;
   let size = null;
   for (const edge of [PHOTO.fullEdge, 1280, 1024, 800]) {
-    const canvas = canvasFor(source, sw, sh, edge, mirror);
+    const canvas = canvasFor(source, part, edge, mirror);
     const bytes = await jpeg(canvas, [0.86, 0.78, 0.7, 0.62, 0.54], PHOTO.fullMaxBytes);
     if (bytes && bytes.length <= PHOTO.fullMaxBytes) {
       full = bytes;
@@ -69,7 +76,7 @@ export async function preparePhoto(source, { mirror = false } = {}) {
     }
   }
   if (!full) return null;
-  const thumb = await jpeg(canvasFor(source, sw, sh, PHOTO.thumbEdge, mirror), [0.72, 0.62, 0.52, 0.42], PHOTO.thumbMaxBytes);
+  const thumb = await jpeg(canvasFor(source, part, PHOTO.thumbEdge, mirror), [0.72, 0.62, 0.52, 0.42], PHOTO.thumbMaxBytes);
   if (!thumb) return null;
   return { full, thumb, ...size };
 }

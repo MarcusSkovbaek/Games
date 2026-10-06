@@ -98,8 +98,8 @@ fordi den krypterer alt.
 ## Fotos fra aftenen
 
 Tryk på **kameraet** i toppen (eller *Tag et billede* i feedet). Kameraet åbner direkte i appen
-med bag- og selfiekamera, blitz og selvudløser (3 eller 10 sekunder) til gruppebilleder. Skriv en
-tekst, hvis du vil, og tryk *Del med alle*.
+med bag- og selfiekamera, blitz, zoom (knib eller tryk på *1×* for 2×) og selvudløser (3 eller 10
+sekunder) til gruppebilleder. Skriv en tekst, hvis du vil, og tryk *Del med alle*.
 
 - **I feedet:** Billedet dukker op i feedet mellem drinks, førerskifte og lykkehjul, så man kan
   følge aftenen — og alle får en lille besked med en *Se*-knap. Under *Fotos* i feedet ligger alle
@@ -107,6 +107,10 @@ tekst, hvis du vil, og tryk *Del med alle*.
   overgange. Tryk på et billede for at se det i fuld størrelse: stryg til siden for det næste,
   dobbelttryk eller knib for at zoome (på en computer: piletaster, dobbeltklik, + / − / 0 og Esc).
   Når værten afslutter eventet, viser slutskærmen *Aftenens billede* — det med flest ❤️.
+- **Afspil aftenen:** Under *Fotos* (og på slutskærmen) afspiller *Afspil aftenen* alle billederne
+  som et lysbilledshow i den rækkefølge, de blev taget — med klokkeslæt og en bjælke, der viser
+  tiden. Hold fingeren på billedet for at holde pause, og stryg for at springe frem eller tilbage.
+  Indtil det første billede er taget, minder storskærmen gæsterne om, at de kan tage billeder.
 - **Like, slet og skjul:** Alle kan give et ❤️. Man kan slette sine egne billeder, og værten — i
   pub golf også dommeren — kan skjule andres. Begge dele fjerner billedet fra alles telefoner og fra
   serverne. Under **Mig → Fotos** kan værten slå fotos fra og slette alle aftenens billeder på én

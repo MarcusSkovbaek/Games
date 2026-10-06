@@ -27,7 +27,7 @@ export function PhotoLayer({ room, d, extra }) {
     announced.current = newest.ts;
     if (d.t - newest.ts > 60_000) return; // an older photo arriving late
     const name = d.players.get(newest.pid)?.name || 'En gæst';
-    toast(`📸 ${name} delte et billede`, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key }) } });
+    toast(`📸 ${name} delte et billede`, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key, show: false }) } });
   }, [newest?.key]);
   return html`<${CameraOverlay} room=${room} /><${PhotoViewer} room=${room} d=${d} extra=${extra} />`;
 }

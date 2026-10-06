@@ -6,7 +6,7 @@ import { gameById } from '../../minigames/index.js';
 import { toggleReaction } from '../../app/actions.js';
 import { fmtAgo } from '../format.js';
 import { haptic } from '../feedback.js';
-import { FeedPhoto, PhotoGrid } from '../photos/photo.js';
+import { FeedPhoto, PhotoGrid, PlayButton } from '../photos/photo.js';
 import { CameraCard } from '../photos/layer.js';
 import { eventUi } from './event.js';
 
@@ -123,7 +123,7 @@ export function FeedTab({ room, d }) {
     />
     ${view === 'photos'
       ? photos.length
-        ? html`<${PhotoGrid} room=${room} d=${d} photos=${photos} />`
+        ? html`<${PlayButton} d=${d} /><${PhotoGrid} room=${room} d=${d} photos=${photos} />`
         : html`<${Empty} icon="camera" title="Ingen billeder endnu" text="Tag det første billede fra aftenen — det dukker op her og i feedet hos alle." />`
       : items.length
         ? html`<div class="card" style=${{ padding: '2px 14px' }}>

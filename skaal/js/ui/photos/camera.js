@@ -1,5 +1,5 @@
-// The camera, right in the app: a live viewfinder, front/back camera, flash, self-timer, and a
-// look at the picture before it is shared. Photos taken here never land in the phone's camera
+// The camera, right in the app: a live viewfinder, front/back camera, flash, zoom, self-timer, and
+// a look at the picture before it is shared. Photos taken here never land in the phone's camera
 // roll — they only exist inside the event. Where the browser can't open the camera directly, the
 // phone's own camera (or the camera roll) is used instead.
 import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, Icon, IconButton, Button, Spinner, cx } from '../kit.js';
@@ -10,9 +10,14 @@ import { sfx, haptic } from '../feedback.js';
 import { PhotoFrame } from './photo.js';
 
 const TIMERS = [0, 3, 10];
+// Zooming by cropping the picture (where the camera can't zoom itself) stops at 3×, before it
+// gets too blurry.
+const DIGITAL_MAX = 3;
+const zoomText = (z) => `${String(Math.round(z * 10) / 10).replace('.', ',')}×`;
 
+// zoom: true asks for the camera's own zoom where the browser offers it (Chrome on Android).
 function constraints(facing) {
-  return { audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } } };
+  return { audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 }, zoom: true } };
 }
 
 async function openStream(facing) {
@@ -51,6 +56,13 @@ function Camera({ room, onClose }) {
   const [blink, setBlink] = useState(0);
   const [last, setLast] = useState(null);
   const countdown = useRef(null);
+  // Zoom: the camera's own where it has one ({ min, max }), otherwise by cropping the picture.
+  const [zoom, setZoom] = useState(1);
+  const [lens, setLens] = useState(null);
+  const zoomNow = useRef(1);
+  zoomNow.current = zoom;
+  const lensNow = useRef(null);
+  lensNow.current = lens;
 
   const stop = () => {
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -68,6 +80,12 @@ function Camera({ room, onClose }) {
       if (track) track.onended = () => stream.current === s && setStatus('unavailable');
       const caps = track?.getCapabilities?.() || {};
       setTorch({ can: !!caps.torch, on: false });
+      const hw = caps.zoom?.max > 1 ? { min: Math.max(1, caps.zoom.min || 1), max: Math.min(8, caps.zoom.max) } : null;
+      setLens(hw);
+      lensNow.current = hw;
+      setZoom(1);
+      zoomNow.current = 1;
+      if (hw) track.applyConstraints({ advanced: [{ zoom: hw.min }] }).catch(() => {});
       if (video.current) {
         video.current.srcObject = s;
         await video.current.play().catch(() => {});
@@ -113,6 +131,69 @@ function Camera({ room, onClose }) {
     start(next);
   };
 
+  // The camera's own zoom takes a moment per change: send only the latest one while it works.
+  const lensBusy = useRef(false);
+  const lensWant = useRef(1);
+  const zoomLens = (z) => {
+    lensWant.current = z;
+    const track = stream.current?.getVideoTracks()[0];
+    if (lensBusy.current || !track || !lensNow.current) return;
+    lensBusy.current = true;
+    track
+      .applyConstraints({ advanced: [{ zoom: Math.max(lensNow.current.min, z) }] })
+      .catch(() => {
+        // It wouldn't: crop the picture instead.
+        lensNow.current = null;
+        setLens(null);
+      })
+      .finally(() => {
+        lensBusy.current = false;
+        if (lensWant.current !== z) zoomLens(lensWant.current);
+      });
+  };
+  const zoomTo = (z) => {
+    const max = lensNow.current ? lensNow.current.max : DIGITAL_MAX;
+    const next = Math.round(Math.min(max, Math.max(1, z)) * 20) / 20;
+    if (next === zoomNow.current) return;
+    zoomNow.current = next;
+    setZoom(next);
+    if (lensNow.current) zoomLens(next);
+  };
+  // Pinch the viewfinder to zoom (or ctrl/⌘ + scroll on a computer).
+  const fingers = useRef({ at: new Map(), d0: 0, z0: 1 });
+  const spread = () => {
+    const [a, b] = [...fingers.current.at.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  };
+  const finger = {
+    onPointerDown: (e) => {
+      const f = fingers.current;
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* not a real pointer */
+      }
+      f.at.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (f.at.size === 2) {
+        f.d0 = spread();
+        f.z0 = zoomNow.current;
+      }
+    },
+    onPointerMove: (e) => {
+      const f = fingers.current;
+      if (!f.at.has(e.pointerId)) return;
+      f.at.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (f.at.size === 2) zoomTo((f.z0 * spread()) / f.d0);
+    },
+    onPointerUp: (e) => fingers.current.at.delete(e.pointerId),
+    onPointerCancel: (e) => fingers.current.at.delete(e.pointerId),
+    onWheel: (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      zoomTo(zoomNow.current * Math.exp(-e.deltaY / 200));
+    },
+  };
+
   const toggleTorch = async () => {
     const on = !torch.on;
     try {
@@ -143,7 +224,7 @@ function Camera({ room, onClose }) {
     sfx.shutter();
     haptic(20);
     try {
-      const prepared = await preparePhoto(v, { mirror: facing === 'user' });
+      const prepared = await preparePhoto(v, { mirror: facing === 'user', zoom: lens ? 1 : zoom });
       setLit(false);
       setBlink((b) => b + 1);
       review(prepared);
@@ -220,7 +301,16 @@ function Camera({ room, onClose }) {
     </label>`;
 
   return html`<div class="camera" ref=${root} tabindex="-1" role="dialog" aria-modal="true" aria-label="Kamera">
-    <video ref=${video} class=${cx('camera__video', facing === 'user' && 'is-mirrored', status === 'live' && !shot && 'is-on')} autoplay muted playsinline aria-hidden="true"></video>
+    <video
+      ref=${video}
+      class=${cx('camera__video', facing === 'user' && 'is-mirrored', status === 'live' && !shot && 'is-on')}
+      style=${{ '--zoom': lens ? 1 : zoom }}
+      autoplay
+      muted
+      playsinline
+      aria-hidden="true"
+    ></video>
+    ${status === 'live' && !shot ? html`<div class="camera__finder" aria-hidden="true" ...${finger}></div>` : null}
     ${blink ? html`<div class="camera__blink" key=${blink} aria-hidden="true"></div>` : null}
     ${lit ? html`<div class="camera__lit" aria-hidden="true"></div>` : null}
     ${count ? html`<div class="camera__count" aria-live="assertive" key=${count}>${count}</div>` : null}
@@ -255,6 +345,11 @@ function Camera({ room, onClose }) {
       : status === 'live' || status === 'starting'
         ? html`<div class="camera__live">
             ${status === 'starting' ? html`<div class="camera__wait"><${Spinner} size=${30} /><span>Starter kameraet …</span></div>` : null}
+            ${status === 'live'
+              ? html`<button type="button" class=${cx('camera__zoom', zoom > 1 && 'is-on')} aria-label=${`Zoom: ${zoomText(zoom)}`} onClick=${() => zoomTo(zoom >= 1.95 ? 1 : 2)}>
+                  ${zoomText(zoom)}
+                </button>`
+              : null}
             <div class="camera__controls">
               ${filePicker('', 'image', { name: 'Vælg fra kamerarullen' })}
               <button type="button" data-autofocus class=${cx('camera__shutter', count && 'is-counting')} aria-label=${count ? 'Stop selvudløseren' : 'Tag billede'} onClick=${shutter} disabled=${status !== 'live' || busy}>

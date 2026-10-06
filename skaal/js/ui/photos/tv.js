@@ -1,8 +1,10 @@
 // The big screen's slideshow: the newest photo as soon as it arrives, then the latest ones in
 // turn — full size, on a blurred copy of itself so portrait photos fill the frame nicely. Each
-// photo fades in over the last one and drifts slowly closer.
+// photo fades in over the last one and drifts slowly closer. Before the first photo: a nudge to
+// take one.
 import { html, useState, useEffect, useRef, Avatar } from '../kit.js';
 import { PhotoFrame, useFullPhoto, useThumb, photoLabel } from './photo.js';
+import { canTakePhotos } from './layer.js';
 
 function Layer({ src, label, top }) {
   return html`<div class=${top ? 'tv-photo__layer is-top' : 'tv-photo__layer'}>
@@ -11,7 +13,7 @@ function Layer({ src, label, top }) {
   </div>`;
 }
 
-export function TvPhotos({ room, d, empty = null }) {
+export function TvPhotos({ room, d }) {
   const recent = d.photos.slice(0, 12);
   const newest = recent[0];
   const photo = !recent.length ? null : d.t - newest.ts < 20_000 ? newest : recent[Math.floor(d.t / 8000) % recent.length];
@@ -27,7 +29,14 @@ export function TvPhotos({ room, d, empty = null }) {
     return () => clearTimeout(t);
   }, [photo?.key]);
   shown.current = photo ? { key: photo.key, src } : null;
-  if (!photo) return empty;
+  if (!photo) {
+    return canTakePhotos(room, d) && !d.ended
+      ? html`<div class="card card--pad tv-photo-hint">
+          <span class="tv-photo-hint__icon" aria-hidden="true">📸</span>
+          <span><strong>Tag billeder i appen</strong><small>De dukker op her med det samme — kun for jer i eventet</small></span>
+        </div>`
+      : null;
+  }
   const p = d.players.get(photo.pid);
   return html`<figure class="card tv-photo">
     ${under ? html`<${Layer} key=${under.key} src=${under.src} />` : null}

@@ -71,7 +71,7 @@ export function PgTv({ room, d, code }) {
     </section>
 
     <aside class="tv__side">
-      <${TvPhotos} room=${room} d=${d} empty=${html`<div class="card card--pad pg-tv__nophoto">📸 Tag billeder i appen — de vises her</div>`} />
+      <${TvPhotos} room=${room} d=${d} />
 
       ${decided.length
         ? html`<div class="card pg-tv__comps">

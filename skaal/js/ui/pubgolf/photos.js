@@ -5,7 +5,7 @@ import { setPodium } from '../../app/actions.js';
 import { toast } from '../ui-store.js';
 import { sfx } from '../feedback.js';
 import { eventUi } from '../screens/event.js';
-import { PhotoThumb, PhotoGrid } from '../photos/photo.js';
+import { PhotoThumb, PhotoGrid, PlayButton } from '../photos/photo.js';
 import { CameraCard } from '../photos/layer.js';
 import { MEDALS } from './common.js';
 
@@ -48,7 +48,7 @@ export function PhotosTab({ room, d }) {
     <${CameraCard} room=${room} d=${d} text="Alle i eventet kan se det — de bedste kan vinde fotokonkurrencen" />
 
     ${d.photos.length
-      ? html`<${PhotoGrid} room=${room} d=${d} photos=${d.photos} badge=${badge} />`
+      ? html`<${PlayButton} d=${d} label="Afspil runden" /><${PhotoGrid} room=${room} d=${d} photos=${d.photos} badge=${badge} />`
       : html`<${Empty} icon="camera" title="Ingen billeder endnu" text="Tag det første billede — de bedste kan vinde fotokonkurrencen." />`}
   </div>`;
 }
