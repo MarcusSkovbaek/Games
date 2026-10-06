@@ -43,6 +43,16 @@ export function BreakerOverlay({ room, d }) {
   useEffect(() => {
     if (!visible) return;
     clearToasts();
+    // Under the camera or a photo the minigame can't be seen: a heads-up on top, and a way to it.
+    const { camera, photo } = eventUi.get();
+    if ((camera || photo) && inst.phase !== 'result') {
+      const g = gameById(inst.g);
+      toast(`${g?.emoji || '🎲'} ${g?.name || 'Et minigame'} starter nu!`, {
+        key: 'breaker',
+        duration: Math.min(15_000, Math.max(5000, inst.playEnd - d.t)),
+        action: { label: 'Spil med', onClick: () => eventUi.set({ camera: false, photo: null, show: false, comments: false }) },
+      });
+    }
     document.documentElement.classList.add('scroll-locked');
     const onKey = (e) => e.key === 'Escape' && hide();
     window.addEventListener('keydown', onKey);

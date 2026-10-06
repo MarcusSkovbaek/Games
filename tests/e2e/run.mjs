@@ -1122,7 +1122,17 @@ const scenarios = {
     assert.match(await anna.page.locator('.viewer__who small').textContent(), /🎞️ taget i går kl\./);
     await anna.page.waitForFunction(() => /blob:/.test(document.querySelector('.viewer__photo')?.style.backgroundImage || ''), null, { timeout: 10000 });
     await shot(anna.page, 'e2e-disposable-developed');
-    await anna.page.getByRole('button', { name: 'Luk', exact: true }).click();
+    // A minigame that starts while she looks at a photo can't be seen under it: a heads-up on top
+    // takes her to it.
+    await tab(host, 'Spil');
+    await startGame(host, 'Happy Hour');
+    const headsUp = anna.page.locator('.toast', { hasText: 'Happy Hour starter nu!' });
+    await headsUp.waitFor({ timeout: 8000 });
+    await headsUp.getByRole('button', { name: 'Spil med' }).click();
+    await anna.page.waitForSelector('.viewer', { state: 'detached' });
+    await anna.page.waitForSelector('.overlay[aria-label="Happy Hour"]');
+    await fastForward([...all, tv], 60_000);
+    for (const ph of all) await ph.page.waitForSelector('.overlay[aria-label="Happy Hour"]', { state: 'detached', timeout: 8000 });
     await tv.page.waitForSelector('.tv-photo', { timeout: 8000 });
 
     // The host turns the disposable camera off: photos are shared at once again.
