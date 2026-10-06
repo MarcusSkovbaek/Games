@@ -8,6 +8,13 @@
 const te = new TextEncoder();
 const td = new TextDecoder();
 
+// Brokers may limit the size of a message, and the usual answer to a bigger one is to hang up.
+// As every unacknowledged message is sent again after reconnecting, that would shut us out of
+// the broker for good — so when the line drops twice right after a big message, messages that
+// big are no longer sent there (see maxOut). Everything smaller than BIG is always sent.
+export const BIG = 64 * 1024;
+const BIG_DROP_MS = 5000;
+
 const T = {
   CONNECT: 1,
   CONNACK: 2,
@@ -188,8 +195,15 @@ export class MqttClient {
     WebSocketImpl = globalThis.WebSocket,
     // Bigger messages are skipped. Ours stay well below (a full-size photo is ~230 KB).
     maxPacket = 2 * 1024 * 1024,
+    // The biggest message this broker takes, as far as we know; onLimit(bytes) when we learn it.
+    maxOut = Infinity,
+    onLimit = () => {},
   }) {
-    Object.assign(this, { url, clientId, keepalive, username, password, onMessage, onStatus, onConnect, WebSocketImpl, maxPacket });
+    Object.assign(this, { url, clientId, keepalive, username, password, onMessage, onStatus, onConnect, WebSocketImpl, maxPacket, onLimit });
+    this.maxOut = Math.max(BIG - 1, Number(maxOut) || Infinity);
+    this.lastBig = 0; // when a big message was last sent
+    this.bigDrops = 0; // connections lost right after one, in a row
+    this.bigOk = 0; // the biggest message the broker has acknowledged
     this.skip = 0; // bytes of an oversized packet still to throw away
     this.skipped = 0; // how many oversized packets were thrown away
     this.status = 'idle';
@@ -333,9 +347,28 @@ export class MqttClient {
   }
 
   _sendPending(key, msg) {
+    if (msg.payload.length > this.maxOut) {
+      this.pending.delete(key); // too big for this broker
+      return;
+    }
     msg.id = this._allocId();
     this.byId.set(msg.id, key);
     this._send(encodePublish(msg));
+    if (msg.payload.length >= BIG) this.lastBig = Date.now();
+  }
+
+  // The connection dropped right after a big message. The second time in a row, the biggest one
+  // still waiting is taken to be too big (and if it keeps happening, the next one down, …).
+  _bigDropped() {
+    this.lastBig = 0;
+    if (++this.bigDrops < 2) return;
+    this.bigDrops = 0;
+    const waiting = [...this.pending.values()].map((m) => m.payload.length).filter((n) => n >= BIG && n > this.bigOk);
+    if (!waiting.length) return;
+    const cap = Math.max(BIG - 1, this.bigOk, Math.max(...waiting) - 1);
+    if (cap >= this.maxOut) return;
+    this.maxOut = cap;
+    this.onLimit(cap);
   }
 
   _send(bytes) {
@@ -451,7 +484,13 @@ export class MqttClient {
       case 'puback': {
         const key = this.byId.get(p.id);
         this.byId.delete(p.id);
-        if (key && this.pending.get(key)?.id === p.id) this.pending.delete(key);
+        const msg = key && this.pending.get(key);
+        if (msg?.id !== p.id) break;
+        this.pending.delete(key);
+        if (msg.payload.length >= BIG) {
+          this.bigOk = Math.max(this.bigOk, msg.payload.length);
+          this.bigDrops = 0;
+        }
         break;
       }
       case 'pubrel':
@@ -493,6 +532,7 @@ export class MqttClient {
 
   _drop(reason) {
     if (reason !== 'refused') this.lastError = reason;
+    if (reason === 'closed' && this.lastBig && Date.now() - this.lastBig < BIG_DROP_MS) this._bigDropped();
     this._teardown();
     for (const f of [...this.fetches.values()]) this._finishFetch(f, null);
     if (this.stopped) {

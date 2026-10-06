@@ -24,6 +24,12 @@ import * as storage from '../core/storage.js';
 import { MqttClient } from './mqtt.js';
 
 const MAX_PHOTO_CHARS = 300_000;
+// A broker's message size limit, once learned, is remembered for a week (see sync/mqtt.js).
+const LIMIT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const knownLimit = (id) => {
+  const l = storage.load(`limit:${id}`);
+  return l && Date.now() - l.at < LIMIT_TTL_MS ? l.bytes : Infinity;
+};
 // Pictures are only ever plain raster images (never SVG, which can carry scripts and links).
 const IMAGE_DATA = /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
 
@@ -123,6 +129,11 @@ export class Room extends Emitter {
         clientId: `skaal_${this.pid.slice(0, 6)}_${randomId(8)}`,
         keepalive: SYNC.keepaliveSec,
         WebSocketImpl: this.WebSocketImpl,
+        maxOut: knownLimit(b.cfg.id),
+        onLimit: (bytes) => {
+          console.warn(`[sync] ${b.cfg.id} takes messages up to ${Math.round(bytes / 1024)} KB`);
+          storage.save(`limit:${b.cfg.id}`, { bytes, at: Date.now() });
+        },
         onStatus: (status) => {
           b.status = status;
           if (status !== 'online') b.settled = false;
@@ -171,7 +182,8 @@ export class Room extends Emitter {
   }
 
   get status() {
-    const brokers = this.brokers.map((b) => ({ id: b.cfg.id, status: b.status }));
+    // limit: the biggest message the broker takes, when it has turned out to have one.
+    const brokers = this.brokers.map((b) => ({ id: b.cfg.id, status: b.status, limit: Number.isFinite(b.client?.maxOut) ? b.client.maxOut : null }));
     const online = brokers.filter((b) => b.status === 'online').length;
     const pending = this.brokers.some((b) => b.client && !b.client.flushed);
     return { online, total: brokers.length, brokers, pending };

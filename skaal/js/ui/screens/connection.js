@@ -18,7 +18,10 @@ export function ConnectionSheet({ room, d, open, onClose }) {
             <span class=${cx('sync-dot', `is-${b.status === 'online' ? 'online' : b.status === 'connecting' ? 'connecting' : 'offline'}`)} aria-hidden="true"></span>
             <span class="list-item__text">
               <span class="list-item__title">Server ${i + 1}</span>
-              <span class="list-item__sub">${room.brokers[i]?.cfg.url.replace(/^wss?:\/\//, '').split('/')[0]}</span>
+              <span class="list-item__sub">
+                ${room.brokers[i]?.cfg.url.replace(/^wss?:\/\//, '').split('/')[0]}
+                ${b.limit ? html`<br />Tager kun beskeder op til ${Math.floor(b.limit / 1024)} KB — store billeder ligger på de andre` : null}
+              </span>
             </span>
             <span class="faint" style=${{ fontSize: '13px', fontWeight: 600 }}>${LABEL[b.status] || b.status}</span>
           </div>`,

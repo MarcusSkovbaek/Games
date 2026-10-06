@@ -251,3 +251,80 @@ test('a stranger’s huge message on our topic is skipped without dropping the c
     await broker.close();
   }
 });
+
+// A broker that hangs up on any message bigger than `limit` — what public brokers tend to do.
+async function startPickyBroker(limit) {
+  const { WebSocketServer } = await import('ws');
+  const received = [];
+  const sockets = new Set();
+  const wss = new WebSocketServer({ port: 0, handleProtocols: (p) => (p.has('mqtt') ? 'mqtt' : false) });
+  wss.on('connection', (ws) => {
+    sockets.add(ws);
+    ws.on('close', () => sockets.delete(ws));
+    const parser = mqttPacket.parser({ protocolVersion: 4 });
+    const send = (packet) => ws.send(mqttPacket.generate(packet));
+    parser.on('packet', (p) => {
+      if (ws.readyState !== 1) return;
+      if (p.cmd === 'connect') send({ cmd: 'connack', returnCode: 0, sessionPresent: false });
+      else if (p.cmd === 'subscribe') send({ cmd: 'suback', messageId: p.messageId, granted: p.subscriptions.map(() => 0) });
+      else if (p.cmd === 'pingreq') send({ cmd: 'pingresp' });
+      else if (p.cmd === 'publish' && p.payload.length > limit) ws.terminate();
+      else if (p.cmd === 'publish') {
+        received.push(p.topic);
+        if (p.qos === 1) send({ cmd: 'puback', messageId: p.messageId });
+      }
+    });
+    parser.on('error', () => ws.terminate());
+    ws.on('message', (data) => parser.parse(Buffer.from(data)));
+  });
+  await new Promise((r) => wss.on('listening', r));
+  return {
+    url: `ws://127.0.0.1:${wss.address().port}`,
+    received,
+    close: () => {
+      for (const ws of sockets) ws.terminate();
+      return new Promise((r) => wss.close(r));
+    },
+  };
+}
+
+test('a broker that hangs up on big messages: its limit is learned instead of being shut out', async () => {
+  const broker = await startPickyBroker(100_000);
+  try {
+    const limits = [];
+    const c = client({ url: broker.url, clientId: 'picky', keepalive: 30, onLimit: (n) => limits.push(n) });
+    c.start();
+    await until(() => c.online);
+    c.publish('t/small', new Uint8Array(1000), { retain: true });
+    c.publish('t/photo', new Uint8Array(150_000), { retain: true }); // the broker hangs up …
+    c.publish('t/after', new Uint8Array(2000), { retain: true }); // … and this one waits behind it
+    await until(() => limits.length === 1 && c.online && c.flushed, 15000);
+    assert.equal(limits[0], 149_999, 'the biggest waiting message was too big');
+    assert.deepEqual([...new Set(broker.received)], ['t/small', 't/after']);
+
+    // Still too big: the limit comes down step by step, and small messages keep flowing.
+    c.publish('t/photo2', new Uint8Array(120_000), { retain: true });
+    c.publish('t/late', new Uint8Array(10), { retain: true });
+    await until(() => limits.length === 2 && c.online && c.flushed, 15000);
+    assert.equal(limits[1], 119_999);
+    assert.ok(broker.received.includes('t/late'));
+    c.publish('t/fits', new Uint8Array(90_000), { retain: true });
+    await until(() => c.flushed);
+    assert.ok(broker.received.includes('t/fits'));
+    assert.ok(!broker.received.some((t) => t.startsWith('t/photo')));
+    assert.equal(c.bigOk, 90_000);
+
+    // A limit learned earlier applies from the start; under 64 KB always goes.
+    const d = client({ url: broker.url, clientId: 'picky2', keepalive: 30, maxOut: 80_000 });
+    d.start();
+    await until(() => d.online);
+    d.publish('u/big', new Uint8Array(90_000), { retain: true });
+    d.publish('u/small', new Uint8Array(60_000), { retain: true });
+    await until(() => d.flushed);
+    assert.ok(broker.received.includes('u/small'));
+    assert.ok(!broker.received.includes('u/big'));
+    assert.equal(client({ url: broker.url, maxOut: 1000 }).maxOut, 64 * 1024 - 1, 'never below 64 KB');
+  } finally {
+    await broker.close();
+  }
+});
