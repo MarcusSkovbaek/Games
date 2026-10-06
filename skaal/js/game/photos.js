@@ -54,3 +54,28 @@ export function derivePhotos({ list, assets = {}, canHide, voided = [] }) {
   }
   return { photos, photoByKey, comments, gone };
 }
+
+// Photos shared in a row by the same person (several from the camera roll at once, a burst at the
+// bar) are one item in the feed: up to 12, each within 3 minutes of the one before. A single photo
+// stays an item of its own (its reactions are the photo's likes).
+export const SET_GAP_MS = 3 * 60_000;
+const SET_MAX = 12;
+
+export function photoFeedItems(photos) {
+  const sets = [];
+  let cur = null;
+  for (const ph of [...photos].sort((a, b) => a.ts - b.ts)) {
+    if (cur && cur.pid === ph.pid && ph.ts - cur.ts < SET_GAP_MS && cur.photos.length < SET_MAX) {
+      cur.photos.push(ph);
+      cur.ts = ph.ts;
+    } else {
+      cur = { pid: ph.pid, ts: ph.ts, photos: [ph] };
+      sets.push(cur);
+    }
+  }
+  return sets.map(({ pid, ts, photos: list }) =>
+    list.length === 1
+      ? { key: list[0].key, ts, kind: 'photo', pid, photo: list[0] }
+      : { key: `set:${list[0].key}`, ts, kind: 'photos', pid, photos: list },
+  );
+}

@@ -8,7 +8,7 @@ import { gameById } from '../minigames/index.js';
 import { hashString } from '../core/rng.js';
 import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
 import { derivePubGolf, officialsOf } from './pubgolf.js';
-import { derivePhotos } from './photos.js';
+import { derivePhotos, photoFeedItems } from './photos.js';
 
 const AFTER_END = new Set(['ack', 'react', 'photo', 'pc', 'phide', 'pghide']);
 
@@ -414,7 +414,7 @@ export function derive(room, t) {
   const canHide = (pid, ts) => pid === meta?.hostId || !!officials?.officialAt(pid, ts);
   const voidedPhotos = all.filter(({ pid, e }) => e.t === 'photo' && voided.has(`${pid}:${e.id}`));
   const { photos, photoByKey, comments, gone: photosGone } = derivePhotos({ list, assets, canHide, voided: voidedPhotos });
-  for (const photo of photos) feed.push({ key: photo.key, ts: photo.ts, kind: 'photo', pid: photo.pid, photo });
+  feed.push(...photoFeedItems(photos));
 
   // Pub golf events: course, teams, scores and competitions.
   const pg = meta?.type === 'pubgolf' ? derivePubGolf({ meta, players, list, photoByKey, t, me }) : null;

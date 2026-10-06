@@ -170,3 +170,28 @@ test('comments: oldest first under each photo; your own can be deleted, the host
   room.add('anna0000', { t: 'x', r: photo.entry.id });
   assert.equal(at(room).comments.size, 0);
 });
+
+test('photos shared in a row by the same person are one item in the feed', () => {
+  const room = makeParty();
+  const a1 = room.photo('anna0000', 'Natten over byen');
+  room.photo('anna0000');
+  room.photo('anna0000');
+  room.photo('bo000000', 'Bo'); // someone else's photo ends the set
+  room.photo('anna0000', 'Igen');
+  room.add('anna0000', { t: 'd', k: 'beer' }).ts += 10 * MIN;
+  const late = room.photo('anna0000', 'Senere'); // more than 3 minutes after: an item of its own
+  late.entry.ts += 10 * MIN;
+  const items = at(room, 'cara0000').feed.filter((f) => f.kind === 'photo' || f.kind === 'photos');
+  assert.deepEqual(
+    items.map((f) => [f.kind, f.pid, f.kind === 'photos' ? f.photos.map((ph) => ph.cap) : f.photo.cap]),
+    [
+      ['photo', 'anna0000', 'Senere'],
+      ['photo', 'anna0000', 'Igen'],
+      ['photo', 'bo000000', 'Bo'],
+      ['photos', 'anna0000', ['Natten over byen', '', '']],
+    ],
+  );
+  const set = items[3];
+  assert.equal(set.key, `set:anna0000:${a1.entry.id}`, 'named after its first photo, so it keeps its place');
+  assert.equal(set.ts, set.photos[2].ts, 'in the feed at the time of its newest photo');
+});

@@ -97,6 +97,10 @@ export function FeedText({ d, item, emoji = false }) {
     }
     case 'photo':
       return html`${emoji ? '📸 ' : ''}${who} delte et billede${item.photo.cap ? html`: <span class="feed-item__quote">“${item.photo.cap}”</span>` : null}`;
+    case 'photos': {
+      const cap = item.photos.find((ph) => ph.cap)?.cap;
+      return html`${emoji ? '📸 ' : ''}${who} delte ${item.photos.length} billeder${cap ? html`: <span class="feed-item__quote">“${cap}”</span>` : null}`;
+    }
     case 'pgchal':
       return html`${emoji ? '🎲 ' : ''}Udfordring: ${item.text}`;
     case 'pgcomp': {

@@ -6,7 +6,7 @@ import { gameById } from '../../minigames/index.js';
 import { toggleReaction } from '../../app/actions.js';
 import { fmtAgo } from '../format.js';
 import { haptic } from '../feedback.js';
-import { FeedPhoto, PhotoGrid, PlayButton } from '../photos/photo.js';
+import { FeedPhoto, FeedPhotoSet, PhotoGrid, PlayButton } from '../photos/photo.js';
 import { FeedComments, CommentButton } from '../photos/comments.js';
 import { CameraCard } from '../photos/layer.js';
 import { eventUi } from './event.js';
@@ -45,6 +45,7 @@ function glyphFor(item) {
     case 'pgpodium':
       return '🏆';
     case 'photo':
+    case 'photos':
       return '📸';
     case 'pgchal':
       return '🎲';
@@ -71,10 +72,11 @@ export function FeedRow({ room, d, item, compact }) {
       <div class="feed-item__text"><${FeedText} d=${d} item=${item} /></div>
       ${details.length ? html`<div class="feed-item__detail">${details.map((ef, i) => html`${i ? html`<br />` : null}${effectText(d, ef)}`)}</div>` : null}
       ${item.kind === 'photo' ? html`<${FeedPhoto} room=${room} d=${d} photo=${item.photo} compact=${compact} />` : null}
+      ${item.kind === 'photos' ? html`<${FeedPhotoSet} room=${room} d=${d} photos=${item.photos} compact=${compact} />` : null}
       ${item.kind === 'photo' && !compact ? html`<${FeedComments} d=${d} photo=${item.photo} />` : null}
       <div class="feed-item__meta">
         <span>${fmtAgo(item.ts, d.t)}</span>
-        ${compact ? null : html`<${Reactions} room=${room} d=${d} itemKey=${item.key} />`}
+        ${compact || item.kind === 'photos' ? null : html`<${Reactions} room=${room} d=${d} itemKey=${item.key} />`}
         ${item.kind === 'photo' && !compact ? html`<${CommentButton} d=${d} photo=${item.photo} />` : null}
       </div>
     </div>

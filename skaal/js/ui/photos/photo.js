@@ -124,6 +124,33 @@ export function FeedPhoto({ room, d, photo, compact }) {
   </button>`;
 }
 
+// Several photos shared together: a small grid in the feed (four at most, then "+3").
+export function FeedPhotoSet({ room, d, photos, compact }) {
+  const shown = photos.slice(0, 4);
+  const more = photos.length - shown.length;
+  return html`<div class=${cx('feed-set', `feed-set--${shown.length}`, compact && 'feed-set--compact')}>
+    ${shown.map((ph, i) => html`<${SetTile} key=${ph.key} room=${room} d=${d} photo=${ph} more=${i === shown.length - 1 ? more : 0} />`)}
+  </div>`;
+}
+
+function SetTile({ room, d, photo, more }) {
+  const ref = useRef(null);
+  const thumb = useThumb(room, photo, useNear(ref));
+  return html`<button
+    type="button"
+    ref=${ref}
+    class="feed-photo feed-set__tile"
+    onClick=${() => eventUi.set({ photo: photo.key })}
+    onContextMenu=${block}
+    aria-label=${`Åbn ${photoLabel(d, photo)}${more ? ` (og ${more} mere)` : ''}`}
+  >
+    <${PhotoFrame} src=${thumb.url} />
+    ${!thumb.url ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
+    <${Pending} room=${room} photo=${photo} short />
+    ${more ? html`<span class="feed-set__more" aria-hidden="true">+${more}</span>` : null}
+  </button>`;
+}
+
 function PhotoTile({ room, d, photo, badge }) {
   const ref = useRef(null);
   const thumb = useThumb(room, photo, useNear(ref));

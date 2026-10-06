@@ -28,7 +28,9 @@ export function PhotoLayer({ room, d, extra }) {
     announced.current = newest.ts;
     if (d.t - newest.ts > 60_000) return; // an older photo arriving late
     const name = d.players.get(newest.pid)?.name || 'En gæst';
-    toast(`📸 ${name} delte et billede`, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key, show: false, comments: false }) } });
+    // Several in a row (picked together from the camera roll): one heads-up for them all.
+    const set = d.feed.find((f) => f.kind === 'photos' && f.photos.some((ph) => ph.key === newest.key));
+    toast(set ? `📸 ${name} delte ${set.photos.length} billeder` : `📸 ${name} delte et billede`, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key, show: false, comments: false }) } });
   }, [newest?.key]);
 
   // Someone comments on one of our photos (unless we are reading that photo's comments).
