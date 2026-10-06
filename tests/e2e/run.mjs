@@ -775,6 +775,13 @@ const scenarios = {
     await bo.page.getByRole('button', { name: 'Skriv en kommentar' }).click();
     await bo.page.waitForSelector('.viewer__comments');
     await bo.page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Skriv en kommentar'); // the cursor is in the text field
+    // … and sips handed to him meanwhile wait until he is done with the photo (no pop-up behind
+    // the viewer taking the cursor away).
+    const boPid0 = await pidOf(bo);
+    await anna.page.evaluate((to) => window.__skaal.session.get().room.append({ t: 'give', to: { [to]: 2 } }), boPid0);
+    await bo.page.waitForFunction(() => window.__skaal.derived().inbox.length === 1, null, { timeout: 8000 });
+    await wait(600);
+    assert.equal(await bo.page.locator('.drink-pop').count(), 0, 'no sip pop-up while the viewer is open');
     await bo.page.keyboard.type('Haha, fedt billede!');
     await bo.page.keyboard.press('ArrowLeft');
     await bo.page.keyboard.press('Enter');
@@ -800,15 +807,19 @@ const scenarios = {
     await anna.page.waitForSelector('.viewer', { state: 'detached' });
     await bo.page.getByRole('button', { name: 'Luk', exact: true }).click();
     await bo.page.waitForSelector('.viewer', { state: 'detached' });
+    await bo.page.waitForSelector('.drink-pop', { timeout: 6000 }); // now the sips pop up
+    await bo.page.getByRole('button', { name: 'Skål — drukket ✓' }).click();
+    await bo.page.waitForSelector('.drink-pop', { state: 'detached' });
 
     // The feed has the photo between the drinks, and sharpens it once it has been seen.
     await tab(host, 'Feed');
     await host.page.waitForSelector('.feed-photo');
     assert.match(await host.page.locator('.feed-item', { has: host.page.locator('.feed-photo') }).textContent(), /Anna delte et billede: “Skål fra baren! 🍻”/);
     assert.deepEqual(await derived(host, (d) => d.feed.filter((f) => f.kind === 'photo' || f.kind === 'drink').map((f) => f.kind)), ['photo', 'drink']);
-    assert.equal(await host.page.locator('.feed-item').first().locator('.feed-photo').count(), 1, 'the newest item is the photo');
+    const photoItem = host.page.locator('.feed-item', { has: host.page.locator('.feed-photo') });
+    assert.equal(await photoItem.count(), 1);
     await host.page.waitForFunction(() => getComputedStyle(document.querySelector('.feed-photo .photo-frame')).backgroundImage.includes('blob:'), null, { timeout: 10000 });
-    assert.match(await host.page.locator('.feed-item').first().locator('.react').first().textContent(), /❤️ 1/, 'Bo’s like shows in the feed too');
+    assert.match(await photoItem.locator('.react').first().textContent(), /❤️ 1/, 'Bo’s like shows in the feed too');
     assert.match(await host.page.locator('.feed-comments').textContent(), /Bo\s*Haha, fedt billede!.*Anna\s*Tak! 🍻/s, 'the comments show under the photo');
     assert.deepEqual(await axeViolations(host.page, axeSource), [], 'the feed with photos is accessible');
     await shot(host.page, 'e2e-feed-photo');
@@ -1003,6 +1014,14 @@ const scenarios = {
     await bo.page.getByRole('button', { name: 'Luk kameraet' }).click();
     await host.page.waitForFunction(() => window.__skaal.derived().photos.length === 2, null, { timeout: 10000 });
     assert.deepEqual(await derived(host, (d) => d.photos.map((ph) => ph.cap).reverse()), ['Natten over byen', ''], 'the caption is on the first');
+    // In the feed they are one item, with a little grid.
+    await tab(host, 'Feed');
+    await host.page.locator('.segmented__opt', { hasText: 'Alt' }).click();
+    await host.page.waitForSelector('.feed-set', { timeout: 8000 });
+    assert.match(await host.page.locator('.feed-item', { has: host.page.locator('.feed-set') }).textContent(), /Bo delte 2 billeder: “Natten over byen”/);
+    assert.equal(await host.page.locator('.feed-set .feed-photo').count(), 2);
+    assert.deepEqual(await axeViolations(host.page, axeSource), [], 'a set of photos in the feed is accessible');
+    await shot(host.page, 'e2e-feed-set');
 
     // Old events with 8-character codes are too weakly protected for photos: no camera there.
     const old = await env.phone('old');
