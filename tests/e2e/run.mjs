@@ -1153,7 +1153,19 @@ const scenarios = {
     await kim.page.waitForSelector('.pg-moment', { timeout: 6000 });
     assert.match(await kim.page.locator('.pg-moment__sub').textContent(), /engangskameraet/);
     await kim.page.locator('.pg-moment').getByRole('button', { name: 'Tag et billede' }).click();
+    await kim.page.waitForSelector('.dispo');
+    // The judge starts the next competition while Kim is in the camera: a heads-up on top, and the
+    // pop-up waits for him (longer than a pop-up usually stays).
+    await ida.page.locator('.pg-comp', { hasText: 'Bedste outfit' }).getByRole('button', { name: 'Start', exact: true }).click();
+    await ida.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Start', exact: true }).click();
+    await kim.page.locator('.toast', { hasText: 'Bedste outfit starter!' }).waitFor({ timeout: 8000 });
+    assert.equal(await kim.page.locator('.pg-moment').count(), 0, 'not hidden under the camera');
+    await fastForward([ida, kim], 2 * 60_000);
     await shootDisposable(kim, 1, { open: false });
+    await kim.page.waitForSelector('.pg-moment', { timeout: 6000 });
+    assert.equal(await kim.page.locator('.pg-moment__text').textContent(), 'Bedste outfit');
+    await kim.page.locator('.pg-moment .pg-moment__actions .btn').last().click();
+    await kim.page.waitForSelector('.pg-moment', { state: 'detached' });
     await tab(kim, 'Fotos');
     await kim.page.waitForSelector('.develop-card');
     assert.equal(await kim.page.locator('.photo-tile').count(), 0);
