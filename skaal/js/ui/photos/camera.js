@@ -10,6 +10,8 @@ import { sfx, haptic } from '../feedback.js';
 import { PhotoFrame } from './photo.js';
 
 const TIMERS = [0, 3, 10];
+// Photos picked from the camera roll in one go.
+const MAX_PICK = 10;
 // Zooming by cropping the picture (where the camera can't zoom itself) stops at 3×, before it
 // gets too blurry.
 const DIGITAL_MAX = 3;
@@ -52,6 +54,8 @@ function Camera({ room, onClose }) {
   const [timer, setTimer] = useState(0);
   const [count, setCount] = useState(0);
   const [shot, setShot] = useState(null); // { prepared, url }
+  const [batch, setBatch] = useState(null); // several from the camera roll: [{ prepared, url }]
+  const [progress, setProgress] = useState(null); // "3 af 8" while preparing or sharing them
   const [busy, setBusy] = useState(false);
   const [blink, setBlink] = useState(0);
   const [last, setLast] = useState(null);
@@ -117,7 +121,7 @@ function Camera({ room, onClose }) {
 
   // Escape: from the review back to the camera, from the camera out.
   const escape = useRef(null);
-  escape.current = () => (shot ? setShot(null) : onClose());
+  escape.current = () => (shot ? setShot(null) : batch ? !busy && setBatch(null) : onClose());
   useLayoutEffect(() => {
     const onKey = (e) => e.key === 'Escape' && !e.defaultPrevented && escape.current();
     window.addEventListener('keydown', onKey);
@@ -259,21 +263,76 @@ function Camera({ room, onClose }) {
     }, 1000);
   };
 
+  // A picture from the phone, ready to share (the decoded original is let go of at once).
+  const prepareFile = async (file) => {
+    const picture = await bitmapFromFile(file);
+    try {
+      return await preparePhoto(picture);
+    } finally {
+      picture.close?.();
+    }
+  };
+
   const onFile = async (e) => {
-    const file = e.currentTarget.files?.[0];
+    const all = [...(e.currentTarget.files || [])];
     e.currentTarget.value = '';
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    if (!all.length) return;
+    const files = all.filter((f) => f.type.startsWith('image/'));
+    if (!files.length) {
       toast('Vælg venligst et billede', { icon: '🖼️', tone: 'bad' });
       return;
     }
     setBusy(true);
     try {
-      review(await preparePhoto(await bitmapFromFile(file)));
+      if (files.length === 1) {
+        review(await prepareFile(files[0]));
+        return;
+      }
+      const picked = files.slice(0, MAX_PICK);
+      const ready = [];
+      for (const [i, file] of picked.entries()) {
+        setProgress(`Gør billederne klar … ${i + 1} af ${picked.length}`);
+        const prepared = await prepareFile(file).catch(() => null);
+        if (prepared) ready.push({ prepared, url: URL.createObjectURL(new Blob([prepared.thumb], { type: 'image/jpeg' })) });
+      }
+      if (files.length > MAX_PICK) toast(`Højst ${MAX_PICK} ad gangen — de første ${MAX_PICK} er med`, { icon: '🖼️' });
+      if (ready.length < picked.length) toast(`${picked.length - ready.length} af billederne kunne ikke åbnes`, { icon: '🖼️', tone: 'bad' });
+      if (ready.length) setBatch(ready);
     } catch {
       toast('Billedet kunne ikke åbnes', { icon: '🖼️', tone: 'bad' });
     } finally {
       setBusy(false);
+      setProgress(null);
+    }
+  };
+  useEffect(() => () => batch?.forEach((b) => URL.revokeObjectURL(b.url)), [batch]);
+
+  // Several photos: shared one by one; the caption goes with the first. If one fails, the rest
+  // stay here to try again.
+  const shareBatch = async (items, caption) => {
+    setBusy(true);
+    let done = 0;
+    let entry = null;
+    try {
+      for (const item of items) {
+        setProgress(`Deler ${done + 1} af ${items.length} …`);
+        entry = await sharePhoto(room, item.prepared, done === 0 ? caption : '');
+        done++;
+      }
+      setBatch(null);
+      toast(`📸 ${done} billeder delt med alle i eventet`, { tone: 'good' });
+    } catch {
+      toast(done ? `${done} af ${items.length} billeder blev delt — prøv igen med resten` : 'Billederne kunne ikke deles', { icon: '📷', tone: 'bad' });
+      if (done) setBatch(items.slice(done));
+    } finally {
+      if (entry) {
+        const lastItem = items[done - 1];
+        setLast({ key: `${room.pid}:${entry.id}`, url: URL.createObjectURL(new Blob([lastItem.prepared.full], { type: 'image/jpeg' })) });
+        sfx.pop();
+        haptic(15);
+      }
+      setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -294,23 +353,27 @@ function Camera({ room, onClose }) {
   };
   useEffect(() => () => last?.url && URL.revokeObjectURL(last.url), [last]);
 
+  // Looking at what was taken or picked, before it is shared.
+  const reviewing = !!shot || !!batch;
+
+  // The camera roll lets you pick several at once; the phone's own camera takes one.
   const filePicker = (label, icon, { capture, name } = {}) =>
     html`<label class=${cx('camera__pick', !label && 'camera__pick--icon')}>
-      <input type="file" accept="image/*" capture=${capture || null} class="sr-only" aria-label=${name || label} onChange=${onFile} disabled=${busy} />
+      <input type="file" accept="image/*" capture=${capture || null} multiple=${!capture} class="sr-only" aria-label=${name || label} onChange=${onFile} disabled=${busy} />
       <${Icon} name=${icon} size=${label ? 20 : 24} />${label}
     </label>`;
 
   return html`<div class="camera" ref=${root} tabindex="-1" role="dialog" aria-modal="true" aria-label="Kamera">
     <video
       ref=${video}
-      class=${cx('camera__video', facing === 'user' && 'is-mirrored', status === 'live' && !shot && 'is-on')}
+      class=${cx('camera__video', facing === 'user' && 'is-mirrored', status === 'live' && !reviewing && 'is-on')}
       style=${{ '--zoom': lens ? 1 : zoom }}
       autoplay
       muted
       playsinline
       aria-hidden="true"
     ></video>
-    ${status === 'live' && !shot ? html`<div class="camera__finder" aria-hidden="true" ...${finger}></div>` : null}
+    ${status === 'live' && !reviewing ? html`<div class="camera__finder" aria-hidden="true" ...${finger}></div>` : null}
     ${blink ? html`<div class="camera__blink" key=${blink} aria-hidden="true"></div>` : null}
     ${lit ? html`<div class="camera__lit" aria-hidden="true"></div>` : null}
     ${count ? html`<div class="camera__count" aria-live="assertive" key=${count}>${count}</div>` : null}
@@ -318,7 +381,7 @@ function Camera({ room, onClose }) {
     <header class="camera__top">
       <${IconButton} icon="x" label="Luk kameraet" onClick=${onClose} />
       <span class="spacer"></span>
-      ${status === 'live' && !shot
+      ${status === 'live' && !reviewing
         ? html`
             ${torch.can || facing === 'user'
               ? html`<button
@@ -342,6 +405,15 @@ function Camera({ room, onClose }) {
 
     ${shot
       ? html`<${Review} shot=${shot} busy=${busy} onRetake=${() => setShot(null)} onShare=${share} />`
+      : batch
+        ? html`<${BatchReview}
+            items=${batch}
+            busy=${busy}
+            progress=${progress}
+            onRemove=${(i) => setBatch(batch.length > 1 ? batch.filter((_, j) => j !== i) : null)}
+            onCancel=${() => setBatch(null)}
+            onShare=${(cap) => shareBatch(batch, cap)}
+          />`
       : status === 'live' || status === 'starting'
         ? html`<div class="camera__live">
             ${status === 'starting' ? html`<div class="camera__wait"><${Spinner} size=${30} /><span>Starter kameraet …</span></div>` : null}
@@ -373,7 +445,37 @@ function Camera({ room, onClose }) {
               <${Button} variant="ghost" onClick=${() => start()}>Prøv kameraet igen<//>
             </div>
           </div>`}
-    ${busy && !shot ? html`<div class="camera__busy"><${Spinner} size=${34} /></div>` : null}
+    ${busy && !reviewing
+      ? html`<div class="camera__busy" role="status">
+          <${Spinner} size=${34} />
+          ${progress ? html`<span>${progress}</span>` : null}
+        </div>`
+      : null}
+  </div>`;
+}
+
+function BatchReview({ items, busy, progress, onRemove, onCancel, onShare }) {
+  const [cap, setCap] = useState('');
+  const n = items.length;
+  return html`<div class="camera__review">
+    <div class="camera__batch" aria-label="Valgte billeder">
+      ${items.map(
+        (it, i) => html`<div class="camera__batch-item" key=${it.url}>
+          <${PhotoFrame} src=${it.url} label=${`Billede ${i + 1} af ${n}`} />
+          <button type="button" class="camera__batch-remove" aria-label=${`Fjern billede ${i + 1}`} onClick=${() => onRemove(i)} disabled=${busy}>
+            <${Icon} name="x" size=${16} />
+          </button>
+        </div>`,
+      )}
+    </div>
+    <div class="camera__form">
+      <input class="input" maxlength=${PHOTO.captionMax} placeholder="Skriv en tekst (valgfri)" aria-label="Tekst til billederne" value=${cap} onInput=${(e) => setCap(e.currentTarget.value)} />
+      <p class="camera__batch-note" aria-live="polite">${progress || 'Teksten kommer med det første billede.'}</p>
+      <div class="btn-row">
+        <${Button} variant="secondary" onClick=${onCancel} disabled=${busy}>Annullér<//>
+        <${Button} icon="check" loading=${busy} onClick=${() => onShare(cap)}>Del ${n} ${n === 1 ? 'billede' : 'billeder'}<//>
+      </div>
+    </div>
   </div>`;
 }
 

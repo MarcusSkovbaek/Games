@@ -985,6 +985,25 @@ const scenarios = {
     for (const ph of [...all, late, denied]) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 0, null, { timeout: 8000 });
     await bo.page.waitForFunction((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !b), offline, { timeout: 8000 });
 
+    // Several photos from the camera roll at once: reviewed together, one taken out again, shared
+    // one by one — the caption goes with the first.
+    await bo.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+    await bo.page.waitForSelector('.camera__live, .camera__fallback', { timeout: 10000 });
+    const roll = [];
+    for (const [emoji, colors] of [['🍕', '#f6d365,#fda085'], ['🎸', '#84fab0,#8fd3f4'], ['🌙', '#a18cd1,#fbc2eb']]) roll.push(await photoOf(env.browser, emoji, colors));
+    await bo.page.setInputFiles('.camera input[aria-label="Vælg fra kamerarullen"]', roll.map((buffer, i) => ({ name: `roll${i}.jpg`, mimeType: 'image/jpeg', buffer })));
+    await bo.page.waitForSelector('.camera__batch', { timeout: 15000 });
+    assert.equal(await bo.page.locator('.camera__batch-item').count(), 3);
+    assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'picking several photos is accessible');
+    await shot(bo.page, 'e2e-camera-batch');
+    await bo.page.getByRole('button', { name: 'Fjern billede 2' }).click();
+    await bo.page.fill('.camera__form input', 'Natten over byen');
+    await bo.page.getByRole('button', { name: 'Del 2 billeder' }).click();
+    await bo.page.waitForSelector('.camera__batch', { state: 'detached', timeout: 15000 });
+    await bo.page.getByRole('button', { name: 'Luk kameraet' }).click();
+    await host.page.waitForFunction(() => window.__skaal.derived().photos.length === 2, null, { timeout: 10000 });
+    assert.deepEqual(await derived(host, (d) => d.photos.map((ph) => ph.cap).reverse()), ['Natten over byen', ''], 'the caption is on the first');
+
     // Old events with 8-character codes are too weakly protected for photos: no camera there.
     const old = await env.phone('old');
     await old.page.goto(env.appUrl('#/e/K7F2QXRM'));

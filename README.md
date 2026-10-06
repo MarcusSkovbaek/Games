@@ -102,7 +102,8 @@ fordi den krypterer alt.
 
 Tryk på **kameraet** i toppen (eller *Tag et billede* i feedet). Kameraet åbner direkte i appen
 med bag- og selfiekamera, blitz, zoom (knib eller tryk på *1×* for 2×) og selvudløser (3 eller 10
-sekunder) til gruppebilleder. Skriv en tekst, hvis du vil, og tryk *Del med alle*.
+sekunder) til gruppebilleder. Skriv en tekst, hvis du vil, og tryk *Del med alle*. Fra
+kamerarullen kan du vælge op til 10 billeder ad gangen og dele dem samlet.
 
 - **I feedet:** Billedet dukker op i feedet mellem drinks, førerskifte og lykkehjul, så man kan
   følge aftenen — og alle får en lille besked med en *Se*-knap. Under *Fotos* i feedet ligger alle

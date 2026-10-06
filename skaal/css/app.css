@@ -7584,8 +7584,51 @@ button.pg-edit__emoji {
   inset: 0;
   z-index: 4;
   display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  background: rgba(0, 0, 0, 0.45);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Several photos from the camera roll, before they are shared */
+.camera__batch {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  padding: 4px 12px;
+  overflow-y: auto;
+}
+
+.camera__batch-item {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.camera__batch-remove {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.35);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
+.camera__batch-note {
+  margin-top: -4px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 /* Full-screen viewer */
