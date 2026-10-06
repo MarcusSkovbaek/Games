@@ -1,7 +1,7 @@
 {
   "name": "SKÅL — live drikke-scoreboard",
   "short_name": "SKÅL",
-  "description": "Track drinks, se stillingen live og spil minigames sammen til festen.",
+  "description": "Track drinks, se stillingen live, spil minigames og pub golf, og del billeder fra aftenen.",
   "lang": "da",
   "start_url": "./",
   "scope": "./",

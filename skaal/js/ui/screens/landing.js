@@ -18,12 +18,13 @@ export function Landing() {
           </svg>
         </div>
         <h1 class="logo landing__logo">SKÅL</h1>
-        <p class="landing__tagline">Live scoreboard, lykkehjul og minigames til festen — direkte på alles telefoner.</p>
+        <p class="landing__tagline">Live scoreboard, minigames, pub golf og billeder fra aftenen — direkte på alles telefoner.</p>
         <div class="landing__pills">
           <span class="pill">🍺 Tæl drinks</span>
           <span class="pill">🏆 Live stilling</span>
-          <span class="pill">🎡 Lykkehjul</span>
           <span class="pill">🎲 Minigames</span>
+          <span class="pill">⛳ Pub golf</span>
+          <span class="pill">📸 Fotos</span>
         </div>
       </div>
 
