@@ -10,9 +10,8 @@ import { TOUR_FACES, reachesFinish, tourContext } from '../game/tour.js';
 import { drinkById } from '../game/drinks.js';
 import { randomId, randomFloat } from '../core/ids.js';
 import { now } from '../core/clock.js';
-import { normalizePg, photoPrefix } from '../game/pubgolf.js';
+import { normalizePg } from '../game/pubgolf.js';
 import { shuffle } from '../core/rng.js';
-import { getFile, putFile, deleteFile } from '../core/files.js';
 
 export function logDrink(room, drinkId) {
   const before = getDerived(room);
@@ -159,24 +158,6 @@ export function drawChallenge(room, { c, text }) {
   return room.append({ t: 'chal', ...(text ? { text: String(text).trim().slice(0, 160) } : { c }) });
 }
 
-export function sharePhoto(room, dataUrl, caption) {
-  const name = `${photoPrefix(room.pid)}${randomId(6)}`;
-  const asset = room.setAsset(name, dataUrl);
-  keepPhoto(room, name, asset);
-  return room.append({ t: 'photo', a: name, cap: String(caption || '').trim().slice(0, 140) });
-}
-
-// Your own photo is deleted; anyone else's is hidden (judge or host).
-export function removePhoto(room, photo) {
-  if (photo.pid === room.pid) {
-    room.append({ t: 'x', r: photo.key.slice(photo.key.indexOf(':') + 1) });
-    room.setAsset(photo.asset, null);
-    forgetPhoto(room, photo.asset);
-  } else {
-    room.append({ t: 'pghide', k: photo.key });
-  }
-}
-
 export function updatePubGolf(room, patch) {
   room.setMeta({ pg: normalizePg({ ...room.state.meta.pg, ...patch }) });
 }
@@ -193,38 +174,4 @@ export function shuffleTeams(room, d) {
   if (!teams.length) return;
   const pids = shuffle(randomFloat, d.ranking.filter((p) => !p.left).map((p) => p.pid));
   room.appendMany(pids.map((pid, i) => ({ t: 'team', p: pid, team: teams[i % teams.length].id })));
-}
-
-// Photos are too big for the local cache, so this device keeps its own in IndexedDB until the
-// brokers have them for sure — a reload before the upload finished does not lose them.
-async function keepPhoto(room, name, asset) {
-  try {
-    const list = (await getFile(`photos:${room.roomId}`)) || [];
-    await putFile(`photo:${name}`, asset);
-    await putFile(`photos:${room.roomId}`, [...new Set([...list, name])]);
-  } catch {
-    /* no IndexedDB: the brokers still have it */
-  }
-}
-
-async function forgetPhoto(room, name) {
-  try {
-    const list = (await getFile(`photos:${room.roomId}`)) || [];
-    await deleteFile(`photo:${name}`);
-    await putFile(`photos:${room.roomId}`, list.filter((x) => x !== name));
-  } catch {
-    /* nothing kept */
-  }
-}
-
-export async function restorePhotos(room) {
-  try {
-    const list = (await getFile(`photos:${room.roomId}`)) || [];
-    for (const name of list) {
-      const asset = await getFile(`photo:${name}`);
-      if (asset) room.restoreAsset(name, asset);
-    }
-  } catch {
-    /* no IndexedDB */
-  }
 }

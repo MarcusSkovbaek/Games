@@ -13,8 +13,7 @@
 //   hole    { h }                  the group moves on to hole h               — officials
 //   podium  { c, places | photos } result of competition c                   — officials
 //   chal    { c | text }           a challenge for the teams                  — officials
-//   photo   { a, cap }             a photo (image in shared asset a)          — anyone
-//   pghide  { k }                  hide photo k                               — officials
+// Photos (and hiding them) work as in every event — see game/photos.js.
 // Officials are the host and the judge. The host appoints the judge (meta.judges keeps every
 // appointment with its time); a judge's entries count for the time they were judge.
 
@@ -103,8 +102,6 @@ export const CHALLENGES = [
 
 const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
 
-// Photos are shared images named after their owner, so only the owner's log can claim them.
-export const photoPrefix = (pid) => `ph-${String(pid).slice(0, 16)}-`;
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
 const ID = /^[a-z0-9]{1,16}$/;
 
@@ -203,8 +200,9 @@ export function fmtToPar(n) {
 }
 
 // Builds the pub golf part of the derived state. `list(type)` gives the valid log entries of a
-// type in time order (see derive.js), `players` the derived players, `assets` the shared images.
-export function derivePubGolf({ meta, players, list, assets = {}, t, me }) {
+// type in time order (see derive.js), `players` the derived players, `photoByKey` the event's
+// photos (for the photo competition).
+export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, me }) {
   const cfg = normalizePg(meta.pg);
   const { judge, hostId, officialAt } = officialsOf(meta);
   const holeById = new Map(cfg.course.map((h, i) => [h.id, { ...h, n: i + 1 }]));
@@ -260,21 +258,6 @@ export function derivePubGolf({ meta, players, list, assets = {}, t, me }) {
     if (e.h !== current) feed.push({ key: `${pid}:${e.id}`, ts: e.ts, kind: 'pghole', pid, h: e.h });
     current = e.h;
   }
-
-  // ------------------------------------------------------------------------------ photos
-  const hidden = new Set();
-  for (const { pid, e } of list('pghide')) if (officialAt(pid, e.ts) && typeof e.k === 'string') hidden.add(e.k);
-  const photos = [];
-  for (const { pid, e } of list('photo')) {
-    const key = `${pid}:${e.id}`;
-    if (hidden.has(key) || typeof e.a !== 'string' || !e.a.startsWith(photoPrefix(pid))) continue;
-    const asset = assets[e.a];
-    if (asset && !asset.data) continue; // deleted by its owner
-    photos.push({ key, pid, asset: e.a, data: asset?.data || null, cap: str(e.cap, 140), ts: e.ts });
-    feed.push({ key, ts: e.ts, kind: 'pgphoto', pid, photo: key });
-  }
-  photos.sort((a, b) => b.ts - a.ts);
-  const photoByKey = new Map(photos.map((ph) => [ph.key, ph]));
 
   // ------------------------------------------------------------------------ competitions
   const results = new Map(); // compId → { places: [{ team?, pid?, photo? } | null ×3], by, ts, key }
@@ -397,8 +380,6 @@ export function derivePubGolf({ meta, players, list, assets = {}, t, me }) {
     adjustments,
     results,
     comps: cfg.comps,
-    photos,
-    photoByKey,
     challenges,
     feed,
     now: t,

@@ -6,14 +6,13 @@ import { QR } from '../qr.js';
 import { eventLink } from '../router.js';
 import { ToPar, TeamBadge, PlayerAvatar, holeTitle, MEDALS, entrantName } from './common.js';
 import { ChallengeOverlay, PodiumOverlay } from './overlays.js';
+import { TvPhotos } from '../photos/tv.js';
 
 export function PgTv({ room, d, code }) {
   const pg = d.pg;
   const hole = pg.current;
   const started = (tm) => tm.played > 0 || tm.pen || tm.bon;
   const top = pg.individuals.filter((x) => x.played > 0).slice(0, 5);
-  const recent = pg.photos.filter((ph) => ph.data).slice(0, 8);
-  const photo = recent.length ? recent[Math.floor(d.t / 8000) % recent.length] : null;
   const decided = pg.comps.map((c) => ({ comp: c, first: pg.results.get(c.id)?.places[0] || null })).filter((x) => x.first);
 
   return html`<div class="tv tv--pg">
@@ -72,15 +71,7 @@ export function PgTv({ room, d, code }) {
     </section>
 
     <aside class="tv__side">
-      ${photo
-        ? html`<figure class="card pg-tv__photo" key=${photo.key}>
-            <img src=${photo.data} alt="" />
-            <figcaption>
-              <${Avatar} player=${d.players.get(photo.pid)} size=${28} />
-              <span><strong>${d.players.get(photo.pid)?.name}</strong>${photo.cap ? html` — ${photo.cap}` : null}</span>
-            </figcaption>
-          </figure>`
-        : html`<div class="card card--pad pg-tv__nophoto">📸 Del billeder i appen — de vises her</div>`}
+      <${TvPhotos} room=${room} d=${d} empty=${html`<div class="card card--pad pg-tv__nophoto">📸 Tag billeder i appen — de vises her</div>`} />
 
       ${decided.length
         ? html`<div class="card pg-tv__comps">

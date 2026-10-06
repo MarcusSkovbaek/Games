@@ -19,6 +19,8 @@ import {
   rigSpin,
   createPubGolf,
   joinPubGolf,
+  takePhoto,
+  pickPhoto,
 } from './helpers.mjs';
 import { startBroker } from '../support/broker.mjs';
 
@@ -523,35 +525,27 @@ const scenarios = {
     await anna.page.waitForFunction((bar) => document.querySelector('.pg-hero__bar')?.textContent === bar, bars[1], { timeout: 3000 });
     await tv.page.waitForFunction(() => document.querySelector('.pg-tv__n')?.textContent === 'Hul2/9', null, { timeout: 6000 });
 
-    // Photos: shared with everyone, deleted by their owner, liked.
-    const sharePhoto = async (ph, emoji, colors, caption) => {
-      await tab(ph, 'Fotos');
-      await ph.page.setInputFiles('.pg-upload input[type=file]', { name: 'photo.jpg', mimeType: 'image/jpeg', buffer: await photoOf(env.browser, emoji, colors) });
-      await ph.page.waitForSelector('.pg-share__img');
-      if (caption) await ph.page.fill('input[placeholder^="Skriv en tekst"]', caption);
-      await ph.page.getByRole('button', { name: 'Del med alle' }).click();
-      await ph.page.waitForSelector('.sheet.is-open', { state: 'detached' });
-    };
-    await sharePhoto(anna, '🍻', '#f6d365,#fda085', 'Skål fra Heidis!');
-    await sharePhoto(bo, '⛳', '#84fab0,#8fd3f4');
-    const tiles = (ph, n) => ph.page.waitForFunction((k) => document.querySelectorAll('.pg-tile > img').length === k, n, { timeout: 10000 });
-    for (const ph of [host, sara]) {
+    // Photos: taken in the app (or picked from the camera roll), deleted by their owner, liked.
+    await takePhoto(anna, 'Skål fra Heidis!');
+    await pickPhoto(bo, await photoOf(env.browser, '⛳', '#84fab0,#8fd3f4'));
+    const tiles = (ph, n) => ph.page.waitForFunction((k) => document.querySelectorAll('.photo-tile').length === k, n, { timeout: 10000 });
+    for (const ph of [host, sara, anna, bo]) {
       await tab(ph, 'Fotos');
       await tiles(ph, 2);
     }
-    await bo.page.locator('.pg-tile', { hasText: 'Bo' }).click();
-    await bo.page.locator('.pg-viewer__bar').getByRole('button', { name: 'Slet' }).click();
-    await bo.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Slet', exact: true }).click();
+    await bo.page.locator('.photo-tile', { hasText: 'Bo' }).click();
+    await bo.page.locator('.viewer__action', { hasText: 'Slet' }).click();
+    await bo.page.locator('.viewer__confirm .btn--danger').click();
     for (const ph of [host, sara, anna, bo]) await tiles(ph, 1);
-    await sara.page.locator('.pg-tile', { hasText: 'Anna' }).click();
-    await sara.page.locator('.pg-like').click();
-    await sara.page.locator('.sheet.is-open .sheet__close').click();
-    await anna.page.waitForSelector('.pg-tile__likes', { timeout: 5000 });
+    await sara.page.locator('.photo-tile', { hasText: 'Anna' }).click();
+    await sara.page.locator('.viewer__like').click();
+    await sara.page.getByRole('button', { name: 'Luk', exact: true }).click();
+    await anna.page.waitForSelector('.photo-tile__likes', { timeout: 5000 });
     assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'the photo gallery is accessible');
 
     // The judge puts Anna's photo first in the photo competition: a podium pops up everywhere.
-    await host.page.locator('.pg-tile', { hasText: 'Anna' }).click();
-    await host.page.getByRole('button', { name: /🥇 1\.-plads/ }).click();
+    await host.page.locator('.photo-tile', { hasText: 'Anna' }).click();
+    await host.page.locator('.viewer__places').getByRole('button', { name: /🥇 1\.-plads/ }).click();
     for (const ph of [anna, bo, sara, tv]) await ph.page.waitForSelector('.pg-moment--podium', { timeout: 6000 });
     assert.equal(await host.page.locator('.pg-moment').count(), 0, 'no pop-up for the judge who set it');
     assert.match(await sara.page.locator('.pg-moment--podium .overlay__title').textContent(), /Fotokonkurrence/);
@@ -560,7 +554,8 @@ const scenarios = {
     await shot(sara.page, 'e2e-pg-podium');
     await closeMoments(all);
     await tv.page.locator('.pg-moment').click();
-    await host.page.locator('.sheet.is-open .sheet__close').click();
+    await host.page.getByRole('button', { name: 'Luk', exact: true }).click();
+    await host.page.waitForSelector('.viewer', { state: 'detached' });
     await wait(600);
     assert.deepEqual(await standings(bo), [['Hold Blå', -2], ['Hold Rød', -1]], 'photo podium: 3 strokes off for Anna’s team');
 
@@ -603,7 +598,7 @@ const scenarios = {
     // The big screen: the hole, the teams, the photo and the winners.
     await tv.page.waitForSelector('.pg-moment', { state: 'detached' });
     assert.match(await tv.page.locator('.pg-trow--tv').first().textContent(), /Hold Rød/);
-    assert.equal(await tv.page.locator('.pg-tv__photo > img').count(), 1);
+    assert.equal(await tv.page.locator('.tv-photo').count(), 1);
     assert.equal(await tv.page.locator('.pg-tv__comp').count(), 2, 'competition winners on the big screen');
     assert.deepEqual(await axeViolations(tv.page, axeSource), [], 'the big screen is accessible');
     await shot(tv.page, 'e2e-pg-tv');
@@ -654,6 +649,148 @@ const scenarios = {
     assert.match(await sara.page.locator('.pg-final__title').textContent(), /Hold Rød vinder/);
     await shot(sara.page, 'e2e-pg-final');
     assertNoErrors(all.concat(tv, se));
+  },
+
+  async 'photos: in-app camera, feed, full size on demand, likes, hide and delete, no saving, TV, old events'(env) {
+    const axeSource = readFileSync(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8');
+    const { ph: host, code } = await createEvent(env, { photo: await photoOf(env.browser, '😎', '#ff9a8b,#ff6a88') });
+    assert.equal(code.length, 12, 'new events get 12-character codes');
+    const anna = await joinEvent(env, code, 'Anna', await photoOf(env.browser, '🦊', '#a1c4fd,#c2e9fb'));
+    const bo = await joinEvent(env, code, 'Bo');
+    const all = [host, anna, bo];
+    const tv = await env.phone('tv', { width: 1280, height: 720, scale: 1 });
+    await tv.page.goto(env.appUrl(`#/tv/${code}`));
+    await tv.page.waitForSelector('.tv__board');
+    await logDrink(bo, 'Øl', 1);
+
+    // Anna takes a photo with the camera in the app.
+    await anna.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+    await anna.page.waitForSelector('.camera__video.is-on', { timeout: 10000 });
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the camera is accessible');
+    await shot(anna.page, 'e2e-camera');
+    await anna.page.getByRole('button', { name: 'Tag billede', exact: true }).click();
+    await anna.page.waitForSelector('.camera__review');
+    await anna.page.fill('.camera__form input', 'Skål fra baren! 🍻');
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the review is accessible');
+    await anna.page.getByRole('button', { name: 'Del med alle' }).click();
+    await anna.page.waitForSelector('.camera__last:not(.is-empty)', { timeout: 10000 });
+    await anna.page.getByRole('button', { name: 'Luk kameraet' }).click();
+    const first = await derived(anna, (d) => ({ key: d.photos[0].key, asset: d.photos[0].asset, full: d.photos[0].full, cap: d.photos[0].cap }));
+    assert.deepEqual([first.full, first.cap], [true, 'Skål fra baren! 🍻']);
+
+    // Everyone gets a heads-up; Bo opens the photo from it and the full size is fetched.
+    await bo.page.locator('.toast', { hasText: 'Anna delte et billede' }).getByRole('button', { name: 'Se' }).click();
+    await bo.page.waitForSelector('.viewer');
+    await bo.page.waitForFunction(() => getComputedStyle(document.querySelector('.viewer__photo')).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+    assert.equal(await bo.page.locator('.viewer__cap').textContent(), 'Skål fra baren! 🍻');
+    assert.equal(await bo.page.locator('.viewer__action').count(), 0, 'Bo can neither delete nor hide Anna’s photo');
+    // No way to save it: no <img> with the photo, no context menu, no dragging.
+    assert.equal(await bo.page.locator('img[src^="blob:"]').count(), 0);
+    const blocked = await bo.page.evaluate(() => {
+      const el = document.querySelector('.viewer__photo');
+      const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      const drag = new Event('dragstart', { bubbles: true, cancelable: true });
+      return [!el.dispatchEvent(menu), !el.dispatchEvent(drag), getComputedStyle(el).webkitTouchCallout || getComputedStyle(el).getPropertyValue('-webkit-touch-callout')];
+    });
+    assert.deepEqual(blocked.slice(0, 2), [true, true], 'context menu and dragging are blocked');
+    assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'the viewer is accessible');
+    await shot(bo.page, 'e2e-viewer');
+    await bo.page.locator('.viewer__like').click();
+    await bo.page.getByRole('button', { name: 'Luk', exact: true }).click();
+    await bo.page.waitForSelector('.viewer', { state: 'detached' });
+
+    // The feed has the photo between the drinks, and sharpens it once it has been seen.
+    await tab(host, 'Feed');
+    await host.page.waitForSelector('.feed-photo');
+    assert.match(await host.page.locator('.feed-item', { has: host.page.locator('.feed-photo') }).textContent(), /Anna delte et billede: “Skål fra baren! 🍻”/);
+    assert.deepEqual(await derived(host, (d) => d.feed.filter((f) => f.kind === 'photo' || f.kind === 'drink').map((f) => f.kind)), ['photo', 'drink']);
+    assert.equal(await host.page.locator('.feed-item').first().locator('.feed-photo').count(), 1, 'the newest item is the photo');
+    await host.page.waitForFunction(() => getComputedStyle(document.querySelector('.feed-photo .photo-frame')).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+    assert.deepEqual(await axeViolations(host.page, axeSource), [], 'the feed with photos is accessible');
+    await shot(host.page, 'e2e-feed-photo');
+
+    // The big screen shows it too, full size.
+    await tv.page.waitForFunction(() => getComputedStyle(document.querySelector('.tv-photo__img') || document.body).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+
+    // Bo picks one from his camera roll; Anna sees the like on hers in the photo grid.
+    await pickPhoto(bo, await photoOf(env.browser, '🎤', '#a18cd1,#fbc2eb'), 'Karaoke');
+    await tab(anna, 'Feed');
+    await anna.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
+    await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 2, null, { timeout: 10000 });
+    assert.match(await anna.page.locator('.photo-tile', { hasText: 'Anna' }).textContent(), /❤️ 1/);
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the photo grid is accessible');
+    // Swipe (or use the arrow keys) from one photo to the next.
+    await anna.page.locator('.photo-tile').first().click();
+    const position = () => anna.page.locator('.viewer__who small').textContent();
+    assert.match(await position(), /1 af 2/);
+    const box = await anna.page.locator('.viewer__stage').boundingBox();
+    await anna.page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+    await anna.page.mouse.down();
+    await anna.page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 6 });
+    await anna.page.mouse.up();
+    await anna.page.waitForFunction(() => document.querySelector('.viewer__who small')?.textContent.includes('2 af 2'));
+    await anna.page.keyboard.press('ArrowLeft');
+    await anna.page.waitForFunction(() => document.querySelector('.viewer__who small')?.textContent.includes('1 af 2'));
+    await anna.page.keyboard.press('Escape');
+    await anna.page.waitForSelector('.viewer', { state: 'detached' });
+
+    // The host hides Bo's photo for everyone; Anna deletes her own — gone everywhere, also the
+    // full size on the brokers.
+    await tab(host, 'Feed');
+    await host.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
+    await host.page.locator('.photo-tile', { hasText: 'Bo' }).click();
+    await host.page.locator('.viewer__action', { hasText: 'Skjul' }).click();
+    await host.page.locator('.viewer__confirm .btn--danger').click();
+    await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 1, null, { timeout: 8000 });
+    await anna.page.locator('.photo-tile').click();
+    await anna.page.locator('.viewer__action', { hasText: 'Slet' }).click();
+    await anna.page.locator('.viewer__confirm .btn--danger').click();
+    await anna.page.waitForSelector('.viewer', { state: 'detached' });
+    for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 0, null, { timeout: 8000 });
+    await bo.page.waitForFunction((a) => window.__skaal.session.get().room.state.assets[a]?.data === null, first.asset, { timeout: 8000 });
+    assert.equal(await bo.page.evaluate((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => b?.length ?? null), first.asset), null, 'the full size is gone from the broker');
+
+    // A late joiner sees photos (thumbnails at once, the full size on demand).
+    await takePhoto(anna, 'Sidste runde');
+    const late = await joinEvent(env, code, 'Late');
+    await tab(late, 'Feed');
+    await late.page.waitForFunction(() => getComputedStyle(document.querySelector('.feed-photo .photo-frame') || document.body).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+
+    // Without access to the camera, the phone's own camera or the camera roll still works.
+    const denied = await env.phone('denied');
+    await denied.context.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('no', 'NotAllowedError'));
+    });
+    await denied.page.goto(env.appUrl(`#/e/${code}`));
+    await denied.page.waitForSelector('.event-preview', { timeout: 15000 });
+    await denied.page.fill('input[name=name]', 'Dennis');
+    await denied.page.getByRole('button', { name: /Deltag i festen/ }).click();
+    await denied.page.waitForSelector('.drink-grid');
+    await denied.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+    await denied.page.waitForSelector('.camera__fallback');
+    assert.match(await denied.page.locator('.camera__fallback h2').textContent(), /ikke adgang til kameraet/);
+    assert.deepEqual(await axeViolations(denied.page, axeSource), [], 'the camera fallback is accessible');
+    await denied.page.getByRole('button', { name: 'Luk kameraet' }).click();
+    await pickPhoto(denied, await photoOf(env.browser, '🎉', '#f6d365,#fda085'), 'Fra kamerarullen');
+    await host.page.waitForFunction(() => window.__skaal.derived().photos.length === 2, null, { timeout: 8000 });
+
+    // Old events with 8-character codes are too weakly protected for photos: no camera there.
+    const old = await env.phone('old');
+    await old.page.goto(env.appUrl('#/e/K7F2QXRM'));
+    await old.page.waitForFunction(() => window.__skaal.session.get().room, null, { timeout: 15000 });
+    await old.page.evaluate(() => {
+      const room = window.__skaal.session.get().room;
+      room.setMeta({ name: 'Gammel fest', hostId: room.pid, createdAt: Date.now(), startedAt: Date.now(), ended: 0, removed: [], settings: {} });
+    });
+    await old.page.waitForSelector('.event-preview', { timeout: 15000 });
+    await old.page.fill('input[name=name]', 'Olga');
+    await old.page.getByRole('button', { name: /Gem og invitér/ }).click();
+    await old.page.waitForSelector('.qr svg');
+    await old.page.locator('.sheet__close').first().click();
+    assert.equal(await old.page.getByRole('button', { name: 'Tag et billede', exact: true }).count(), 0);
+    await tab(old, 'Feed');
+    await old.page.waitForSelector('.photo-locked');
+    assertNoErrors([...all, tv, late, denied, old]);
   },
 
   async 'resilience: offline logging, broker restart healing, continue on new phone, leave'(env) {

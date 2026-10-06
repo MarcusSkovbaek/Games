@@ -1,8 +1,9 @@
 // Minimal MQTT 3.1.1 client over WebSocket — no dependencies, ~300 lines.
 //
 // Supports what the game needs: QoS 0/1 publish (with an offline outbox where a newer retained
-// message replaces an older one for the same topic), subscriptions, retained messages, a last
-// will, keepalive pings and automatic reconnect with jittered exponential backoff.
+// message replaces an older one for the same topic), subscriptions, retained messages, one-off
+// fetches of a single retained message, a last will, keepalive pings and automatic reconnect with
+// jittered exponential backoff.
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -17,6 +18,8 @@ const T = {
   PUBCOMP: 7,
   SUBSCRIBE: 8,
   SUBACK: 9,
+  UNSUBSCRIBE: 10,
+  UNSUBACK: 11,
   PINGREQ: 12,
   PINGRESP: 13,
   DISCONNECT: 14,
@@ -89,6 +92,10 @@ export function encodeSubscribe(id, topics) {
   return packet((T.SUBSCRIBE << 4) | 0x02, parts);
 }
 
+export function encodeUnsubscribe(id, topics) {
+  return packet((T.UNSUBSCRIBE << 4) | 0x02, [u16(id), ...topics.map(str)]);
+}
+
 const ack = (type, flags, id) => packet((type << 4) | flags, [u16(id)]);
 const PINGREQ_BYTES = Uint8Array.of(T.PINGREQ << 4, 0);
 const DISCONNECT_BYTES = Uint8Array.of(T.DISCONNECT << 4, 0);
@@ -121,6 +128,8 @@ function decodePacket(first, body) {
       return { type: 'pubcomp', id: id16(0) };
     case T.SUBACK:
       return { type: 'suback', id: id16(0), codes: [...body.subarray(2)] };
+    case T.UNSUBACK:
+      return { type: 'unsuback', id: id16(0) };
     case T.PINGRESP:
       return { type: 'pingresp' };
     default:
@@ -173,6 +182,7 @@ export class MqttClient {
     this.subs = new Map(); // topic -> qos
     this.pending = new Map(); // key -> { topic, payload, qos, retain, id }
     this.byId = new Map(); // packet id -> pending key
+    this.fetches = new Map(); // topic -> one-off fetch of a retained message
     this.nextId = 1;
     this.attempt = 0;
     this.ws = null;
@@ -198,6 +208,7 @@ export class MqttClient {
   stop() {
     this.stopped = true;
     clearTimeout(this._retryTimer);
+    for (const f of [...this.fetches.values()]) this._finishFetch(f, null);
     if (this.ws && this.status === 'online') this._send(DISCONNECT_BYTES);
     this._teardown();
     this._setStatus('stopped');
@@ -222,6 +233,51 @@ export class MqttClient {
   subscribe(topic, qos = 0) {
     this.subs.set(topic, qos);
     if (this.online) this._send(encodeSubscribe(this._allocId(), [{ topic, qos }]));
+  }
+
+  unsubscribe(topic) {
+    this.subs.delete(topic);
+    if (this.online) this._send(encodeUnsubscribe(this._allocId(), [topic]));
+  }
+
+  // The retained message on one topic, without keeping the subscription — for big things (a
+  // full-size photo) that are only needed when someone looks at them. Resolves with the payload,
+  // or null when the broker has none, the connection drops or it takes too long. A broker sends a
+  // retained message right after acknowledging the subscription, so "nothing within graceMs of the
+  // SUBACK, and nothing still arriving" means there is none.
+  fetchRetained(topic, { graceMs = 1200, timeoutMs = 25000 } = {}) {
+    if (!this.online) return Promise.resolve(null);
+    const running = this.fetches.get(topic);
+    if (running) return running.promise;
+    const f = { topic, id: this._allocId(), timers: [] };
+    f.promise = new Promise((resolve) => (f.resolve = resolve));
+    f.graceMs = graceMs;
+    this.fetches.set(topic, f);
+    f.timers.push(setTimeout(() => this._finishFetch(f, null), timeoutMs));
+    this._send(encodeSubscribe(f.id, [{ topic, qos: 0 }]));
+    return f.promise;
+  }
+
+  _finishFetch(f, payload) {
+    if (this.fetches.get(f.topic) !== f) return;
+    this.fetches.delete(f.topic);
+    f.timers.forEach(clearTimeout);
+    if (this.online) this._send(encodeUnsubscribe(this._allocId(), [f.topic]));
+    f.resolve(payload);
+  }
+
+  _fetchAcked(f, ok) {
+    if (!ok) {
+      this._finishFetch(f, null);
+      return;
+    }
+    const check = () => {
+      if (this.fetches.get(f.topic) !== f) return;
+      // A big message may still be on its way: wait while bytes keep arriving.
+      if (this.buf.length || Date.now() - this.lastRx < 300) f.timers.push(setTimeout(check, 300));
+      else this._finishFetch(f, null);
+    };
+    f.timers.push(setTimeout(check, f.graceMs));
   }
 
   publish(topic, payload, { qos = 1, retain = false } = {}) {
@@ -252,10 +308,11 @@ export class MqttClient {
   }
 
   _allocId() {
+    const fetching = new Set([...this.fetches.values()].map((f) => f.id));
     for (let i = 0; i < 65535; i++) {
       const id = this.nextId;
       this.nextId = this.nextId >= 65535 ? 1 : this.nextId + 1;
-      if (!this.byId.has(id)) return id;
+      if (!this.byId.has(id) && !fetching.has(id)) return id;
     }
     return 1;
   }
@@ -350,11 +407,19 @@ export class MqttClient {
         this._startPing();
         this.onConnect();
         break;
-      case 'publish':
+      case 'publish': {
         if (p.qos === 1) this._send(ack(T.PUBACK, 0, p.id));
         if (p.qos === 2) this._send(ack(T.PUBREC, 0, p.id));
-        this.onMessage(p.topic, p.payload, { retain: p.retain });
+        const f = this.fetches.get(p.topic);
+        if (f) this._finishFetch(f, p.payload.length ? p.payload : null);
+        else this.onMessage(p.topic, p.payload, { retain: p.retain });
         break;
+      }
+      case 'suback': {
+        const f = [...this.fetches.values()].find((x) => x.id === p.id);
+        if (f) this._fetchAcked(f, p.codes.every((c) => c < 0x80));
+        break;
+      }
       case 'puback': {
         const key = this.byId.get(p.id);
         this.byId.delete(p.id);
@@ -401,6 +466,7 @@ export class MqttClient {
   _drop(reason) {
     if (reason !== 'refused') this.lastError = reason;
     this._teardown();
+    for (const f of [...this.fetches.values()]) this._finishFetch(f, null);
     if (this.stopped) {
       this._setStatus('stopped');
       return;

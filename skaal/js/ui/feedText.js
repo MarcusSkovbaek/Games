@@ -95,8 +95,8 @@ export function FeedText({ d, item, emoji = false }) {
       const places = item.result.places.map((pl, i) => (pl ? `${i + 1}. ${pl.team ? d.pg.teamById.get(pl.team)?.name : d.players.get(pl.pid)?.name}` : null)).filter(Boolean);
       return html`${emoji ? '🏆 ' : ''}${B(comp?.name || 'Konkurrence')}: ${places.length ? places.join(' · ') : 'podiet er nulstillet'}`;
     }
-    case 'pgphoto':
-      return html`${emoji ? '📸 ' : ''}${who} delte et billede`;
+    case 'photo':
+      return html`${emoji ? '📸 ' : ''}${who} delte et billede${item.photo.cap ? html`: <span class="feed-item__quote">“${item.photo.cap}”</span>` : null}`;
     case 'pgchal':
       return html`${emoji ? '🎲 ' : ''}Udfordring: ${item.text}`;
     case 'tour': {

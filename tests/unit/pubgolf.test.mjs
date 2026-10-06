@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { derive } from '../../skaal/js/game/derive.js';
 import { normalizeSettings, withSchedule } from '../../skaal/js/game/settings.js';
-import { defaultPg, normalizePg, fmtToPar, scoreName, photoPrefix, PG } from '../../skaal/js/game/pubgolf.js';
+import { defaultPg, normalizePg, fmtToPar, scoreName, PG } from '../../skaal/js/game/pubgolf.js';
+import { photoPrefix } from '../../skaal/js/game/photos.js';
 
 const MIN = 60000;
 const T0 = Date.UTC(2026, 9, 10, 18, 0, 0);
@@ -189,7 +190,7 @@ test('one judge at a time: a former judge only counts for the time they were jud
   assert.equal(derive({ ...room, pid: 'host0000' }, T0 + 600 * MIN).pg.isOfficial, true, 'the host always is');
 });
 
-test('photos: shared by their owner, hidden by the judge, and the photo podium rewards the team', () => {
+test('photos: the judge hides and sets the photo podium, which rewards the team', () => {
   const room = makeRoom();
   const img = 'data:image/jpeg;base64,AAAA';
   room.add('anna0000', { t: 'team', p: 'anna0000', team: 't1' });
@@ -198,16 +199,19 @@ test('photos: shared by their owner, hidden by the judge, and the photo podium r
   const b = `${photoPrefix('bo000000')}bbbbbb`;
   room.state.assets[a] = { v: 1, u: 1, data: img };
   room.state.assets[b] = { v: 1, u: 1, data: img };
-  const pa = room.add('anna0000', { t: 'photo', a, cap: 'Skål!' });
-  const pb = room.add('bo000000', { t: 'photo', a: b, cap: 'Hold 2' });
-  room.add('cara0000', { t: 'photo', a, cap: 'Not mine' }); // claims someone else's image
-  let pg = pgOf(room);
-  assert.deepEqual(pg.photos.map((ph) => ph.cap), ['Hold 2', 'Skål!']);
+  const pa = room.add('anna0000', { t: 'photo', a, cap: 'Skål!', f: 1 });
+  const pb = room.add('bo000000', { t: 'photo', a: b, cap: 'Hold 2' }); // the first version: no full size
+  let d = derive(room, T0 + 600 * MIN);
+  assert.deepEqual(d.photos.map((ph) => [ph.cap, ph.full]), [['Hold 2', false], ['Skål!', true]]);
   room.add('judy0000', { t: 'podium', c: 'photo', photos: [`anna0000:${pa.id}`, `bo000000:${pb.id}`] });
-  pg = pgOf(room);
-  assert.deepEqual(pg.results.get('photo').places.map((pl) => pl && pl.team), ['t1', 't2', null]);
-  assert.equal(pg.teams.find((tm) => tm.id === 't1').bon, 3);
-  room.add('judy0000', { t: 'pghide', k: `bo000000:${pb.id}` });
-  room.state.assets[a] = { v: 2, u: 2, data: null }; // Anna deleted hers
-  assert.equal(pgOf(room).photos.length, 0);
+  d = derive(room, T0 + 600 * MIN);
+  assert.deepEqual(d.pg.results.get('photo').places.map((pl) => pl && pl.team), ['t1', 't2', null]);
+  assert.equal(d.pg.teams.find((tm) => tm.id === 't1').bon, 3);
+  room.add('cara0000', { t: 'phide', k: `anna0000:${pa.id}` }); // a player can't hide photos
+  room.add('judy0000', { t: 'pghide', k: `bo000000:${pb.id}` }); // as written by the first version
+  d = derive(room, T0 + 600 * MIN);
+  assert.deepEqual(d.photos.map((ph) => ph.cap), ['Skål!']);
+  assert.deepEqual(d.pg.results.get('photo').places.map((pl) => pl && pl.team), ['t1', null, null], 'a hidden photo leaves the podium');
+  assert.equal(d.canHidePhotos, false, 'Anna is neither host nor judge');
+  assert.equal(derive({ ...room, pid: 'judy0000' }, T0 + 600 * MIN).canHidePhotos, true);
 });

@@ -4,7 +4,7 @@ import * as storage from '../core/storage.js';
 import { randomId } from '../core/ids.js';
 
 export const prefs = createStore({ sound: true, haptics: true, ...storage.load('prefs', {}) });
-prefs.subscribe((s) => storage.save('prefs', { sound: s.sound, haptics: s.haptics }));
+prefs.subscribe((s) => storage.save('prefs', { sound: s.sound, haptics: s.haptics, cameraFacing: s.cameraFacing }));
 
 export const ui = createStore({ toasts: [], dialog: null });
 

@@ -13,6 +13,7 @@ import { TITLE_EMOJI } from './board.js';
 import { TourOverlay, SongButton } from './tour.js';
 import { GroupToastOverlay } from './groupToast.js';
 import { PgTv } from '../pubgolf/tv.js';
+import { TvPhotos } from '../photos/tv.js';
 import { stopTourSong } from '../tourSong.js';
 import { audioReady, audioContext } from '../feedback.js';
 import { prefs } from '../ui-store.js';
@@ -133,6 +134,8 @@ export function TvRoute({ code }) {
       ${d.rules.map(
         (r) => html`<div class="banner" style=${{ '--c': 'var(--violet)' }}><span class="banner__icon">📜</span><span class="banner__text"><div class="banner__sub" style=${{ color: 'var(--text)', fontSize: '16px' }}>${r.text}</div></span></div>`,
       )}
+
+      <${TvPhotos} room=${room} d=${d} />
 
       <div class="card tv__feed">
         <div class="feed">

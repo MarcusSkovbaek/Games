@@ -1,11 +1,13 @@
 // Event codes and random identifiers.
 //
 // Codes use 31 unambiguous characters (no 0/O, 1/I/L) so they are easy to read aloud and type.
-// 8 characters ≈ 8.5·10^11 combinations — the code is also the secret the encryption key is
-// derived from, so it must not be guessable.
+// 12 characters ≈ 7.9·10^17 combinations — the code is also the secret the encryption key is
+// derived from, so it must not be guessable (see core/crypto.js). Events created before photos
+// existed have 8-character codes; they still open.
 
 export const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-export const CODE_LENGTH = 8;
+export const CODE_LENGTH = 12;
+export const LEGACY_CODE_LENGTH = 8;
 
 function randomIndex(max) {
   // Rejection sampling keeps the distribution uniform.
@@ -30,11 +32,15 @@ export function normalizeCode(input) {
 }
 
 export function isValidCode(code) {
-  return typeof code === 'string' && code.length === CODE_LENGTH && [...code].every((c) => CODE_ALPHABET.includes(c));
+  return typeof code === 'string' && (code.length === CODE_LENGTH || code.length === LEGACY_CODE_LENGTH) && [...code].every((c) => CODE_ALPHABET.includes(c));
 }
 
+// Old 8-character codes protect drinks and scores, but are too short to guard photos.
+export const isStrongCode = (code) => typeof code === 'string' && code.length === CODE_LENGTH;
+
+// Groups of four: "K7F2-QXRM-8HJP" (or "K7F2-QXRM" for an old code). Also used while typing.
 export function formatCode(code) {
-  return code && code.length === CODE_LENGTH ? `${code.slice(0, 4)}-${code.slice(4)}` : code || '';
+  return String(code || '').match(/.{1,4}/g)?.join('-') || '';
 }
 
 const ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';

@@ -10,10 +10,14 @@ export const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 export const SHOTS = fileURLToPath(new URL('./screenshots/', import.meta.url));
 mkdirSync(SHOTS, { recursive: true });
 
-export async function setup({ headless = true } = {}) {
+// `fakeVideo`: a .y4m file the fake camera shows instead of its moving test pattern.
+export async function setup({ headless = true, fakeVideo } = {}) {
   const web = await startStatic({ root: ROOT });
   const broker = await startBroker();
-  const browser = await chromium.launch({ headless });
+  // A fake camera that needs no permission prompt.
+  const args = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'];
+  if (fakeVideo) args.push(`--use-file-for-fake-video-capture=${fakeVideo}`);
+  const browser = await chromium.launch({ headless, args });
   const phones = [];
   const appUrl = (hash = '') => `${web.url}/skaal/?broker=${encodeURIComponent(broker.url)}${hash}`;
 

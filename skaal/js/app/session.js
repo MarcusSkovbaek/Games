@@ -7,6 +7,7 @@ import * as storage from '../core/storage.js';
 import { randomId } from '../core/ids.js';
 import { now } from '../core/clock.js';
 import { derive } from '../game/derive.js';
+import { clearPhotoCache } from './photos.js';
 
 export const session = createStore({ code: null, room: null, status: 'idle', version: 0, sync: null });
 
@@ -49,11 +50,11 @@ export async function openEvent(code) {
   closeEvent();
   const promise = (async () => {
     session.set({ code, status: 'connecting', room: null });
-    const { roomId, key } = await deriveRoom(code);
+    const { roomId, key, strong } = await deriveRoom(code);
     let pid = pidFor(code);
     if (!pid) pid = randomId(12);
     rememberEvent(code, { pid });
-    const room = new Room({ code, roomId, key, pid, brokers: resolveBrokers() });
+    const room = new Room({ code, roomId, key, pid, strong, brokers: resolveBrokers() });
     const off = [
       room.on('change', (version) => {
         session.set({ version });
@@ -83,6 +84,7 @@ export function closeEvent() {
   current.off.forEach((f) => f());
   current.room.stop();
   current = null;
+  clearPhotoCache();
   session.set({ code: null, room: null, status: 'idle', sync: null });
 }
 

@@ -133,6 +133,11 @@ export const sfx = {
   go() {
     tone({ freq: 1046, type: 'square', dur: 0.12, gain: 0.08 });
   },
+  // Camera shutter: two quick mechanical clicks.
+  shutter() {
+    noise({ dur: 0.045, gain: 0.3, from: 2600, to: 5200 });
+    noise({ at: 0.075, dur: 0.06, gain: 0.2, from: 1700, to: 3800 });
+  },
   // Tour de France (when no song is set up): a bike bell, then a brass-like fanfare.
   tour() {
     for (const at of [0, 0.16]) {

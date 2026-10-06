@@ -4,7 +4,8 @@ SKÅL er en web-app til festen: Opret et event, lad vennerne scanne QR-koden, og
 øl, shots, drinks og Jägerbombs fra deres egen telefon. Stillingen opdateres live, lykkehjul popper
 op, når man tager føringen eller kommer bagud, og breakers (minigames for alle) holder gang i
 festen undervejs. Skal I på barrunde, så vælg [pub golf](#pub-golf): hold, en dommer, straf- og
-bonusslag, konkurrencer med podie og fotos, som alle kan se.
+bonusslag og konkurrencer med podie. Og med [kameraet i appen](#fotos-fra-aftenen) tager I billeder
+fra aftenen, som kun gæsterne kan se — de dukker op i feedet mellem drinks og lykkehjul.
 
 Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, ingen build-trin.
 
@@ -29,6 +30,12 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   <img src="docs/screenshots/10-tour-ansigt.jpg" width="190" alt="Tour de France: et ansigt dukker op ved 21 drinks" />
 </p>
 <p><img src="docs/screenshots/8-storskaerm.jpg" width="780" alt="Storskærm" /></p>
+<p>
+  <img src="docs/screenshots/20-kamera.jpg" width="190" alt="Kameraet i appen" />
+  <img src="docs/screenshots/21-feed-fotos.jpg" width="190" alt="Billeder i feedet mellem drinks" />
+  <img src="docs/screenshots/22-fotos.jpg" width="190" alt="Alle aftenens billeder" />
+  <img src="docs/screenshots/23-billede.jpg" width="190" alt="Et billede i fuld størrelse" />
+</p>
 <p>
   <img src="docs/screenshots/14-pubgolf-bane.jpg" width="190" alt="Pub golf: hullet, dine slag og dit hold" />
   <img src="docs/screenshots/15-pubgolf-dommer.jpg" width="190" alt="Pub golf: dommerpanelet" />
@@ -64,6 +71,10 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 - **Tour de France-tilstand** — føreren bærer den gule trøje (hjelm og racerbriller på sit billede),
   og når en rytter når 21 drinks, dukker Henning Primdahl, Bobby eller Pimm op på alles telefoner —
   hver med sin egen effekt — mens Tour-sangen spiller. Se [Tour de France](#tour-de-france).
+- **Fotos fra aftenen** — tag billeder med kameraet direkte i appen. De gemmes kun i eventet,
+  alle gæster kan se dem i feedet og på storskærmen, og ingen andre kan — de er krypteret, så
+  hverken servere eller fremmede kan se dem, og de kan ikke downloades fra appen. Se
+  [Fotos fra aftenen](#fotos-fra-aftenen).
 - **Pub golf** — barerne er hullerne, og slurkene er slagene. Spil i hold med én dommer, der
   noterer slag, giver straf- og bonusslag, sender udfordringer og sætter podiet i konkurrencerne
   (bl.a. en fotokonkurrence). Se [Pub golf](#pub-golf).
@@ -83,6 +94,35 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
 
 Alle andre statiske hosts virker også (Netlify, Vercel, Cloudflare Pages …). Appen kræver https,
 fordi den krypterer alt.
+
+## Fotos fra aftenen
+
+Tryk på **kameraet** i toppen (eller *Tag et billede* i feedet). Kameraet åbner direkte i appen
+med bag- og selfiekamera, blitz og selvudløser (3 eller 10 sekunder) til gruppebilleder. Skriv en
+tekst, hvis du vil, og tryk *Del med alle*.
+
+- **I feedet:** Billedet dukker op i feedet mellem drinks, førerskifte og lykkehjul, så man kan
+  følge aftenen — og alle får en lille besked med en *Se*-knap. Under *Fotos* i feedet ligger alle
+  aftenens billeder samlet, og storskærmen viser de nyeste som et lysbilledshow. Tryk på et billede
+  for at se det i fuld størrelse; stryg til siden for det næste.
+- **Like, slet og skjul:** Alle kan give et ❤️. Man kan slette sine egne billeder (de forsvinder
+  fra alles telefoner og fra serverne), og værten — i pub golf også dommeren — kan skjule andres.
+- **Kun for gæsterne:** Billederne krypteres på telefonen med eventets nøgle, før de sendes, og
+  ligger kun krypteret på serverne. Kun telefoner med eventets kode kan se dem.
+- **Kan ikke downloades:** Appen har ingen download-knap, og billederne vises på en måde, hvor
+  browseren ikke tilbyder "Gem billede", langt tryk eller træk. Billeder taget i appen havner ikke
+  i telefonens kamerarulle, og GPS-position og andre metadata fjernes, før billedet deles. (Ingen
+  app kan forhindre skærmbilleder — men ingen kan hente billedet ud af appen.)
+- **Hurtigt og sparsomt:** Hvert billede deles som en lille miniature, der kommer frem med det
+  samme, og en udgave i fuld størrelse, som først hentes, når nogen ser på den. Så downloader
+  telefonerne ikke alle aftenens billeder hver gang.
+- **Gemt sikkert:** Billederne ligger på flere servere på én gang. Mister en server dem, lægger
+  telefonen, der tog billedet, dem tilbage (den gemmer sin egen kopi — også krypteret).
+  *Slet eventet* fjerner alle billeder fra serverne, og *Forlad eventet* fjerner telefonens egne
+  kopier.
+
+Fotos kræver et event med en kode på 12 tegn (alle nye events). Ældre events med 8 tegn kan stadig
+åbnes, men har ikke fotos, fordi deres kode er for kort til at beskytte billeder godt nok.
 
 ## Pub golf
 
@@ -112,10 +152,9 @@ og antallet af slurke er ens slag — som i golf vinder den laveste score.
   som standard; I kan tilføje jeres egne. Dommeren sætter 1.-, 2.- og 3.-pladsen, podiet popper op
   hos alle og står under *Konkurrencer*, og pladserne giver holdet bonusslag (3, 2 og 1 som
   standard, kan ændres).
-- **Fotos:** Alle kan dele billeder med en tekst, og alle kan se og like dem. Fotokonkurrencens
-  podie vælges blandt de delte billeder. Man kan slette sine egne billeder, og dommeren kan skjule
-  andres. Billederne krypteres som alt andet og fylder højst ca. 140 KB hver; *Slet eventet* fjerner
-  dem fra serverne.
+- **Fotos:** Billederne fra kameraet i appen (se [Fotos fra aftenen](#fotos-fra-aftenen)) ligger
+  også under *Fotos*, med holdets farve. Dommeren sætter fotokonkurrencens podie direkte fra et
+  billede i fuld størrelse — eller under *Konkurrencer*.
 - **Scorekort og storskærm:** Scorekortet viser alle huller for alle spillere. Storskærmen viser
   hullet, holdene, de bedste spillere, de seneste billeder og konkurrencevinderne, og *Afslut
   runden* fryser stillingen og kårer vinderholdet.
@@ -171,9 +210,13 @@ Der er ingen server at drive. Telefonerne taler sammen via offentlige **MQTT-bro
 EMQX og Eclipse) over WebSocket, og appen forbinder til alle tre på én gang, så festen fortsætter,
 selv hvis én er nede eller blokeret på netværket.
 
-- **End-to-end krypteret:** Eventkoden er hemmeligheden. Broker-emnet er en hash af koden, og alt
-  indhold krypteres med AES-GCM med en nøgle afledt af koden (PBKDF2). Koden står kun i linkets
-  `#`-del, som browsere aldrig sender til en server — brokerne ser kun krypterede bytes.
+- **End-to-end krypteret:** Eventkoden (12 tegn) er hemmeligheden. Både broker-emnet og nøglen
+  udledes af koden med én langsom PBKDF2-beregning (600.000 runder), og alt indhold — også
+  billederne — krypteres med AES-GCM. Den, der opsnapper de krypterede data fra en offentlig
+  broker, skal betale den beregning for hvert gæt; at gætte en kode ville tage omkring en million
+  års GPU-tid. Koden står kun i linkets `#`-del, som browsere aldrig sender til en server —
+  brokerne ser kun krypterede bytes. (Ældre events med 8 tegn bruger den oprindelige, hurtigere
+  udledning og har derfor ikke fotos.)
 - **Konfliktfri data:** Hver spiller skriver kun i sin egen log (drinks, svar, spins …), og logs
   flettes som mængder. Derfor bliver alle telefoner enige, uanset rækkefølge og netværksudfald.
 - **Offline først:** Alt gemmes lokalt på telefonen. Drinks registreret uden net sendes, når
@@ -247,7 +290,7 @@ Kræver Node 22+ (kun til udvikling og tests — appen selv kører direkte i bro
 ```bash
 npm install          # kun testværktøjer — appen selv har ingen afhængigheder
 npm run dev          # lokal server + lokal MQTT-broker → åbn den viste URL i flere faner
-npm test             # unit-tests: kryptering, MQTT-protokol, synk, point, minigames, pub golf, ydelse
+npm test             # unit-tests: kryptering, MQTT-protokol, synk, fotos, point, minigames, pub golf, ydelse
 npm run test:e2e     # browser-tests: flere "telefoner" spiller et helt event mod en lokal broker
 npm run screenshots  # genskaber billederne i docs/screenshots/
 ```
@@ -264,10 +307,12 @@ skaal/
   js/config.js                              brokere og spil-konstanter
   js/core/                                  kryptering, id'er, ur, seeded random, storage
   js/sync/                                  MQTT-klient og synkronisering (Room)
+  js/app/                                   handlinger, sessionen og fotos (tag, gem, hent)
   js/game/                                  drinks, indstillinger, point/afledt state, hjul, tidsplan,
-                                            Tour, pub golf
+                                            Tour, pub golf, fotos
   js/minigames/                             ét modul pr. minigame + registry
-  js/ui/                                    komponenter, skærme, lyd, grafik (pub golf i js/ui/pubgolf/)
+  js/ui/                                    komponenter, skærme, lyd, grafik (pub golf i js/ui/pubgolf/,
+                                            kamera og billedfremviser i js/ui/photos/)
 tests/unit, tests/e2e                       automatiske tests
 ```
 

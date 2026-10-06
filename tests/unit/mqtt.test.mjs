@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { encodeConnect, encodePublish, encodeSubscribe, parsePackets, MqttClient } from '../../skaal/js/sync/mqtt.js';
+import { encodeConnect, encodePublish, encodeSubscribe, encodeUnsubscribe, parsePackets, MqttClient } from '../../skaal/js/sync/mqtt.js';
 import { startBroker } from '../support/broker.mjs';
 
 const require = createRequire(import.meta.url);
@@ -62,6 +62,13 @@ test('SUBSCRIBE encodes per spec', () => {
       ['b/+/c', 1],
     ],
   );
+});
+
+test('UNSUBSCRIBE encodes per spec', () => {
+  const [p] = parseWithReference(encodeUnsubscribe(9, ['a/b', 'c/#']));
+  assert.equal(p.cmd, 'unsubscribe');
+  assert.equal(p.messageId, 9);
+  assert.deepEqual(p.unsubscriptions, ['a/b', 'c/#']);
 });
 
 test('parser handles packets split and merged across frames', () => {
@@ -138,6 +145,46 @@ test('client talks to a real broker: retained, QoS1 acks, will, reconnect', asyn
     await until(() => got.some((m) => m.topic === 'room/state/a' && m.text === 'v4'));
     assert.ok(!got.some((m) => m.text === 'v3'), 'superseded retained message must not be sent');
     await until(() => a.flushed);
+    a.stop();
+    b.stop();
+  } finally {
+    await broker.close();
+  }
+});
+
+test('fetching one retained message: big payloads, missing topics, no lasting subscription', async () => {
+  const broker = await startBroker();
+  try {
+    const big = new Uint8Array(260_000).map((_, i) => (i * 7) % 256);
+    const a = new MqttClient({ url: broker.url, clientId: 'fa', keepalive: 10 });
+    a.start();
+    await until(() => a.online);
+    a.publish('room-f/photo1', big, { retain: true, qos: 1 });
+    await until(() => a.flushed);
+
+    const got = [];
+    const b = new MqttClient({ url: broker.url, clientId: 'fb', keepalive: 10, onMessage: (topic) => got.push(topic) });
+    assert.equal(await b.fetchRetained('room-f/photo1'), null, 'offline: nothing');
+    b.start();
+    await until(() => b.online);
+    const [one, same] = await Promise.all([b.fetchRetained('room-f/photo1'), b.fetchRetained('room-f/photo1')]);
+    assert.equal(one.length, big.length);
+    assert.equal(one[259_999], big[259_999]);
+    assert.equal(same, one, 'two requests for the same topic share one fetch');
+    const started = Date.now();
+    assert.equal(await b.fetchRetained('room-f/none', { graceMs: 300 }), null, 'a topic without a retained message');
+    assert.ok(Date.now() - started < 3000);
+    assert.equal(b.fetches.size, 0);
+
+    // The fetch did not leave a subscription behind.
+    a.publish('room-f/photo1', Uint8Array.of(1), { retain: true, qos: 1 });
+    await until(() => a.flushed);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(got, []);
+    // An emptied (deleted) retained message reads as missing.
+    a.publish('room-f/photo1', new Uint8Array(0), { retain: true, qos: 1 });
+    await until(() => a.flushed);
+    assert.equal(await b.fetchRetained('room-f/photo1', { graceMs: 300 }), null);
     a.stop();
     b.stop();
   } finally {

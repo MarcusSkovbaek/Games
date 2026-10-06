@@ -1,6 +1,7 @@
 // The "Konkurrencer" tab: who won what (with podiums everyone can see), challenges along the way
 // and minigames for entertainment.
 import { html, useState, useEffect, Sheet, Button, Icon, cx } from '../kit.js';
+import { PhotoFrame } from '../photos/photo.js';
 import { GAMES, gameById } from '../../minigames/index.js';
 import { setPodium, startGame } from '../../app/actions.js';
 import { getDerived } from '../../app/session.js';
@@ -65,7 +66,7 @@ export function CompCard({ d, comp, result, canEdit, onEdit }) {
             pl
               ? html`<li class=${cx('pg-place', `pg-place--${i + 1}`)} style=${{ '--tc': entrantColor(d, pl) }}>
                   <span class="pg-place__medal" role="img" aria-label=${`${i + 1}.-plads`}>${MEDALS[i]}</span>
-                  ${pl.photo && pg.photoByKey.get(pl.photo)?.data ? html`<img class="pg-place__photo" src=${pg.photoByKey.get(pl.photo).data} alt="" />` : null}
+                  ${pl.photo && d.photoByKey.get(pl.photo)?.thumb ? html`<${PhotoFrame} src=${d.photoByKey.get(pl.photo).thumb} class="pg-place__photo" />` : null}
                   <span class="pg-place__name">${entrantName(d, pl)}${pl.photo && pl.team ? html`<small>${d.players.get(pl.pid)?.name}</small>` : null}</span>
                   ${pg.cfg.compBonus[i] && (pl.team || !pg.cfg.teams.length) ? html`<span class="pg-place__bonus">−${pg.cfg.compBonus[i]}</span>` : null}
                 </li>`
@@ -90,7 +91,7 @@ function PodiumSheet({ room, d, comp, onClose }) {
 
   const photo = comp.kind === 'photo';
   const entrants = photo
-    ? pg.photos.map((ph) => ({ id: ph.key, photo: ph }))
+    ? d.photos.map((ph) => ({ id: ph.key, photo: ph }))
     : pg.cfg.teams.length
       ? pg.cfg.teams.map((t) => ({ id: t.id, team: pg.teamById.get(t.id) }))
       : d.ranking.filter((p) => !p.left).map((p) => ({ id: p.pid, player: p }));
@@ -125,18 +126,18 @@ function PodiumSheet({ room, d, comp, onClose }) {
     </div>`}
   >
     ${photo
-      ? pg.photos.length
+      ? d.photos.length
         ? html`<div class="pg-photo-pick">
             ${entrants.map(({ id, photo: ph }) => {
               const at = placeOf(id);
               return html`<button type="button" class=${cx('pg-photo-pick__item', at >= 0 && 'is-on')} aria-pressed=${at >= 0} aria-label=${`Billede fra ${d.players.get(ph.pid)?.name}${at >= 0 ? `, ${at + 1}.-plads` : ''}`} onClick=${() => tapPhoto(id)}>
-                ${ph.data ? html`<img src=${ph.data} alt="" />` : html`<span class="spinner"></span>`}
+                <${PhotoFrame} src=${ph.thumb} />
                 ${at >= 0 ? html`<span class="pg-photo-pick__medal">${MEDALS[at]}</span>` : null}
                 <span class="pg-photo-pick__who">${d.players.get(ph.pid)?.name}</span>
               </button>`;
             })}
           </div>`
-        : html`<p class="muted">Der er ingen billeder endnu — de dukker op her, når nogen deler et under Fotos.</p>`
+        : html`<p class="muted">Der er ingen billeder endnu — de dukker op her, når nogen tager et.</p>`
       : html`<div class="stack">
           ${[0, 1, 2].map(
             (place) => html`<div class="pg-podium-row">

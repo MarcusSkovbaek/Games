@@ -1,4 +1,4 @@
-import { html, useState, Avatar, Empty, Icon, cx } from '../kit.js';
+import { html, useState, useStore, Avatar, Empty, Icon, Segmented, cx } from '../kit.js';
 import { FeedText, effectText } from '../feedText.js';
 import { drinkById } from '../../game/drinks.js';
 import { wheelById } from '../../game/wheels.js';
@@ -6,6 +6,9 @@ import { gameById } from '../../minigames/index.js';
 import { toggleReaction } from '../../app/actions.js';
 import { fmtAgo } from '../format.js';
 import { haptic } from '../feedback.js';
+import { FeedPhoto, PhotoGrid } from '../photos/photo.js';
+import { CameraCard } from '../photos/layer.js';
+import { eventUi } from './event.js';
 
 const REACTIONS = ['🍻', '🔥', '😂', '👑', '😱'];
 
@@ -39,7 +42,7 @@ function glyphFor(item) {
       return '⭐';
     case 'pgpodium':
       return '🏆';
-    case 'pgphoto':
+    case 'photo':
       return '📸';
     case 'pgchal':
       return '🎲';
@@ -63,6 +66,7 @@ export function FeedRow({ room, d, item, compact }) {
     <div class="feed-item__body">
       <div class="feed-item__text"><${FeedText} d=${d} item=${item} /></div>
       ${details.length ? html`<div class="feed-item__detail">${details.map((ef, i) => html`${i ? html`<br />` : null}${effectText(d, ef)}`)}</div>` : null}
+      ${item.kind === 'photo' ? html`<${FeedPhoto} room=${room} d=${d} photo=${item.photo} compact=${compact} />` : null}
       <div class="feed-item__meta">
         <span>${fmtAgo(item.ts, d.t)}</span>
         ${compact ? null : html`<${Reactions} room=${room} d=${d} itemKey=${item.key} />`}
@@ -99,18 +103,33 @@ function Reactions({ room, d, itemKey }) {
 
 export function FeedTab({ room, d }) {
   const [limit, setLimit] = useState(60);
+  const view = useStore(eventUi, (s) => s.feedView || 'all');
   const items = d.feed;
+  const photos = d.photos;
   return html`<div class="stack">
     <div class="section__head" style=${{ paddingTop: '6px' }}>
       <h1 class="section__title" style=${{ fontSize: '26px' }}>Feed</h1>
-      <span class="faint" style=${{ fontSize: '13px' }}>${items.length} hændelser</span>
+      <span class="faint" style=${{ fontSize: '13px' }}>${items.length} hændelser · ${photos.length} ${photos.length === 1 ? 'billede' : 'billeder'}</span>
     </div>
-    ${items.length
-      ? html`<div class="card" style=${{ padding: '2px 14px' }}>
-          <div class="feed">${items.slice(0, limit).map((item) => html`<${FeedRow} key=${item.key} room=${room} d=${d} item=${item} />`)}</div>
-        </div>`
-      : html`<${Empty} icon="activity" title="Stille før stormen" text="Her dukker alt op: drinks, førerskifte, lykkehjul og minigames." />`}
-    ${items.length > limit
+    <${CameraCard} room=${room} d=${d} />
+    <${Segmented}
+      options=${[
+        { value: 'all', label: 'Alt' },
+        { value: 'photos', label: `Fotos${photos.length ? ` · ${photos.length}` : ''}` },
+      ]}
+      value=${view}
+      onChange=${(feedView) => eventUi.set({ feedView })}
+    />
+    ${view === 'photos'
+      ? photos.length
+        ? html`<${PhotoGrid} d=${d} photos=${photos} />`
+        : html`<${Empty} icon="camera" title="Ingen billeder endnu" text="Tag det første billede fra aftenen — det dukker op her og i feedet hos alle." />`
+      : items.length
+        ? html`<div class="card" style=${{ padding: '2px 14px' }}>
+            <div class="feed">${items.slice(0, limit).map((item) => html`<${FeedRow} key=${item.key} room=${room} d=${d} item=${item} />`)}</div>
+          </div>`
+        : html`<${Empty} icon="activity" title="Stille før stormen" text="Her dukker alt op: drinks, billeder, førerskifte, lykkehjul og minigames." />`}
+    ${view === 'all' && items.length > limit
       ? html`<button type="button" class="btn btn--secondary btn--md" onClick=${() => setLimit((l) => l + 60)}>Vis flere</button>`
       : null}
   </div>`;

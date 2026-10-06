@@ -8,6 +8,7 @@ import { clearToasts } from '../ui-store.js';
 import { eventUi } from '../screens/event.js';
 import { TeamBadge, MEDALS, entrantName, entrantColor } from './common.js';
 import { CrownWinner } from './challenge.js';
+import { PhotoFrame } from '../photos/photo.js';
 
 const isLive = (ts, t) => t - ts < PG.momentMs && ts - t < 120_000;
 
@@ -125,11 +126,11 @@ function PodiumMoment({ d, result, tv, onClose }) {
           ${order.map((i) => {
             const place = result.places[i];
             if (!place) return html`<div class="pg-stage__spot is-empty"></div>`;
-            const photo = place.photo ? pg.photoByKey.get(place.photo) : null;
+            const photo = place.photo ? d.photoByKey.get(place.photo) : null;
             const team = place.team ? pg.teamById.get(place.team) : null;
             return html`<div class=${cx('pg-stage__spot', `pg-stage__spot--${i + 1}`)} style=${{ '--tc': entrantColor(d, place) }}>
-              ${photo?.data
-                ? html`<img class="pg-stage__photo" src=${photo.data} alt="" />`
+              ${photo?.thumb
+                ? html`<${PhotoFrame} src=${photo.thumb} class="pg-stage__photo" />`
                 : team
                   ? html`<${TeamBadge} team=${team} size=${i === 0 ? 72 : 56} />`
                   : html`<span class="pg-stage__emoji" aria-hidden="true">${MEDALS[i]}</span>`}

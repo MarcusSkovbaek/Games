@@ -79,6 +79,35 @@ export async function joinPubGolf(env, code, name, { team, photo, size } = {}) {
   return ph;
 }
 
+// Opens the in-app camera from the top bar, takes a picture of the fake camera and shares it.
+export async function takePhoto(ph, caption = '') {
+  await ph.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+  await ph.page.waitForSelector('.camera__video.is-on', { timeout: 10000 });
+  await ph.page.getByRole('button', { name: 'Tag billede', exact: true }).click();
+  await sharePhotoFromReview(ph, caption);
+  await ph.page.getByRole('button', { name: 'Luk kameraet' }).click();
+  await ph.page.waitForSelector('.camera', { state: 'detached' });
+}
+
+// The same, with a picture from the camera roll (picked inside the camera).
+export async function pickPhoto(ph, buffer, caption = '') {
+  await ph.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+  await ph.page.waitForSelector('.camera__live, .camera__fallback', { timeout: 10000 });
+  await ph.page.setInputFiles('.camera input[aria-label="Vælg fra kamerarullen"]', { name: 'photo.jpg', mimeType: 'image/jpeg', buffer });
+  await sharePhotoFromReview(ph, caption);
+  await ph.page.getByRole('button', { name: 'Luk kameraet' }).click();
+  await ph.page.waitForSelector('.camera', { state: 'detached' });
+}
+
+async function sharePhotoFromReview(ph, caption) {
+  await ph.page.waitForSelector('.camera__review', { timeout: 10000 });
+  if (caption) await ph.page.fill('.camera__form input', caption);
+  const before = await ph.page.evaluate(() => window.__skaal.derived().photos.length);
+  await ph.page.getByRole('button', { name: 'Del med alle' }).click();
+  await ph.page.waitForFunction((n) => window.__skaal.derived().photos.length > n, before, { timeout: 10000 });
+  await ph.page.waitForSelector('.camera__review', { state: 'detached' });
+}
+
 export async function logDrink(ph, label, times = 1) {
   for (let i = 0; i < times; i++) {
     await ph.page.locator('.drink-tile', { hasText: label }).first().click();

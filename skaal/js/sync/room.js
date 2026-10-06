@@ -5,21 +5,26 @@
 //   <root>/<roomId>/p/<pid>/i    player profile (name, photo)      — last-writer-wins on `v`
 //   <root>/<roomId>/p/<pid>/l    player log: a grow-only set of entries, merged by id (CRDT)
 //   <root>/<roomId>/p/<pid>/o    presence heartbeat (+ last will when the connection drops)
-//   <root>/<roomId>/a/<name>     shared images (Tour faces and mask, pub golf photos) — LWW on `v`
+//   <root>/<roomId>/a/<name>     shared images (Tour faces and mask, photo thumbnails) — LWW on `v`
+//   <root>/<roomId>-f/<name>     full-size photos (raw encrypted JPEG) — outside the room's `#`
+//                                subscription, fetched one at a time when someone looks at them
 //
 // Every player only appends to their own log, so concurrent writes never conflict and every
 // device converges on the same state regardless of message order. Any device can "heal" a broker
-// that lost data (restart, purge) by republishing what it has cached locally.
+// that lost data (restart, purge) by republishing what it has cached locally; full-size photos are
+// healed by the phone that took them.
 
 import { SYNC } from '../config.js';
 import { Emitter } from '../core/emitter.js';
-import { seal, unseal } from '../core/crypto.js';
+import { seal, unseal, sealBytes, unsealBytes } from '../core/crypto.js';
 import { randomId } from '../core/ids.js';
 import { now } from '../core/clock.js';
 import * as storage from '../core/storage.js';
 import { MqttClient } from './mqtt.js';
 
 const MAX_PHOTO_CHARS = 300_000;
+// Pictures are only ever plain raster images (never SVG, which can carry scripts and links).
+const IMAGE_DATA = /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
 
 function validEntry(e) {
   return (
@@ -39,7 +44,7 @@ export function cleanProfile(p) {
     v: Number(p.v) || 0,
     name: String(p.name || '').trim().slice(0, 32),
     photo:
-      typeof p.photo === 'string' && p.photo.startsWith('data:image/') && p.photo.length < MAX_PHOTO_CHARS
+      typeof p.photo === 'string' && p.photo.length < MAX_PHOTO_CHARS && IMAGE_DATA.test(p.photo)
         ? p.photo
         : null,
     color: typeof p.color === 'string' && /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : null,
@@ -72,18 +77,23 @@ const MAX_ASSET_CHARS = 300_000;
 // An asset is an image (data URL) or null, meaning "use the built-in default".
 export function cleanAsset(a) {
   if (!a || typeof a !== 'object') return null;
-  const ok = typeof a.data === 'string' && a.data.startsWith('data:image/') && a.data.length < MAX_ASSET_CHARS;
+  const ok = typeof a.data === 'string' && a.data.length < MAX_ASSET_CHARS && IMAGE_DATA.test(a.data);
   return { v: Number(a.v) || 0, u: Number(a.u) || 0, data: ok ? a.data : null };
 }
 
 export class Room extends Emitter {
-  constructor({ code, roomId, key, pid, brokers, WebSocketImpl, persist = true }) {
+  constructor({ code, roomId, key, pid, brokers, WebSocketImpl, persist = true, strong = true }) {
     super();
     this.code = code;
     this.roomId = roomId;
     this.key = key;
     this.pid = pid;
+    // False for old 8-character codes: fine for scores, too weak to protect photos.
+    this.strong = strong;
     this.base = `${SYNC.topicRoot}/${roomId}`;
+    this.fbase = `${SYNC.topicRoot}/${roomId}-f`;
+    // Set by the photo store: (name) => sealed full-size photo this device took, or null.
+    this.fullSource = null;
     this.persist = persist;
     this.WebSocketImpl = WebSocketImpl;
     this.state = { meta: null, players: {}, assets: {} };
@@ -112,6 +122,8 @@ export class Room extends Emitter {
         onStatus: (status) => {
           b.status = status;
           if (status !== 'online') b.settled = false;
+          // The broker that answered quickest is asked first for full-size photos.
+          if (status === 'online' && !b.firstOnline) b.firstOnline = Date.now();
           this.emit('status', this.status);
         },
         onConnect: () => this._onConnect(b),
@@ -224,6 +236,11 @@ export class Room extends Emitter {
     return this.state.assets[name]?.data || null;
   }
 
+  // Check every connected broker again (e.g. once this phone's own photos are back from storage).
+  healNow() {
+    for (const b of this.brokers) if (b.settled) this._heal(b);
+  }
+
   // Put back an image this device kept itself (e.g. its own photo after a reload); brokers that
   // lost it get it again when healing.
   restoreAsset(name, asset) {
@@ -235,6 +252,31 @@ export class Room extends Emitter {
     return true;
   }
 
+  // ------------------------------------------------------------------------ full-size photos
+
+  sealFull(name, bytes) {
+    return sealBytes(this.key, bytes, `f/${name}`);
+  }
+
+  publishFull(name, payload) {
+    this._publishRaw(`${this.fbase}/${name}`, payload);
+  }
+
+  clearFull(name) {
+    this._publishRaw(`${this.fbase}/${name}`, new Uint8Array(0));
+  }
+
+  // The JPEG bytes of a full-size photo, asking one broker at a time (quickest first).
+  async fetchFull(name) {
+    const order = this.brokers.filter((b) => b.status === 'online' && b.client).sort((a, b) => (a.firstOnline || 0) - (b.firstOnline || 0));
+    for (const b of order) {
+      const payload = await b.client.fetchRetained(`${this.fbase}/${name}`);
+      const bytes = payload && (await unsealBytes(this.key, payload, `f/${name}`));
+      if (bytes) return bytes;
+    }
+    return null;
+  }
+
   // Wipes the event from the brokers (host action). Other devices see `deleted` and clean up.
   async destroy() {
     this.setMeta({ deleted: true });
@@ -242,7 +284,10 @@ export class Room extends Emitter {
     for (const pid of Object.keys(this.state.players)) {
       for (const kind of ['i', 'l', 'o']) this._publishRaw(this._topic(kind, pid), new Uint8Array(0));
     }
-    for (const name of Object.keys(this.state.assets)) this._publishRaw(`${this.base}/a/${name}`, new Uint8Array(0));
+    for (const name of Object.keys(this.state.assets)) {
+      this._publishRaw(`${this.base}/a/${name}`, new Uint8Array(0));
+      if (name.startsWith('ph-')) this.clearFull(name);
+    }
     storage.remove(`room:${this.roomId}`);
   }
 
@@ -301,6 +346,8 @@ export class Room extends Emitter {
     b.client?.publish(`${this.base}/${rel}`, payload, { qos: 1, retain: true });
   }
 
+
+
   _publishRaw(topic, payload) {
     for (const b of this.brokers) b.client?.publish(topic, payload, { qos: 1, retain: true });
   }
@@ -337,9 +384,18 @@ export class Room extends Emitter {
     const assets = meta?.deleted ? [] : Object.entries(this.state.assets);
     for (const [name, a] of assets) {
       const rel = `a/${name}`;
-      // Photos ("ph-<owner>-…") belong to whoever took them; other shared images to the host.
-      const own = name.startsWith('ph-') ? name.startsWith(`ph-${this.pid.slice(0, 16)}-`) : this.isHost();
-      tasks.push({ rel, own, stale: () => !b.seen.get(rel) || newer(a, b.seen.get(rel)), data: () => this.state.assets[name] });
+      const stale = () => !b.seen.get(rel) || newer(a, b.seen.get(rel));
+      const mine = name.startsWith(`ph-${this.pid.slice(0, 16)}-`);
+      if (name.startsWith('ph-') && this.strong) {
+        // A photo's thumbnail travels with its full-size version, which only the phone that took
+        // it has — so only that phone puts them back, together, on a broker that lost them. (If
+        // anyone else brought back the thumbnail alone, the missing photo would go unnoticed.)
+        if (mine) tasks.push({ rel, own: true, stale, data: () => this.state.assets[name], full: name });
+        continue;
+      }
+      // Older photos ("ph-<owner>-…", thumbnail only) belong to whoever took them; other shared
+      // images to the host.
+      tasks.push({ rel, own: name.startsWith('ph-') ? mine : this.isHost(), stale, data: () => this.state.assets[name] });
     }
     for (const [pid, p] of players) {
       const own = pid === this.pid;
@@ -354,8 +410,15 @@ export class Room extends Emitter {
     }
     for (const task of tasks) {
       if (!task.stale()) continue;
-      const run = () => {
-        if (b.status === 'online' && task.stale()) this._publishTo(b, task.rel, task.data());
+      const run = async () => {
+        if (b.status !== 'online' || !task.stale()) return;
+        if (task.full && task.data()?.data) {
+          // No copy here (another phone of ours took it)? Then leave it to that phone.
+          const full = await this.fullSource?.(task.full);
+          if (!full || b.status !== 'online') return;
+          b.client?.publish(`${this.fbase}/${task.full}`, full, { qos: 1, retain: true });
+        }
+        this._publishTo(b, task.rel, task.data());
       };
       if (task.own) run();
       else this._later(400 + Math.random() * 2600, run);

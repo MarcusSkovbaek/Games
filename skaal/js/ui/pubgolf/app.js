@@ -3,7 +3,8 @@ import { html, useState, useEffect, useRef, useStore, useNow, Icon, cx } from '.
 import { session, getDerived, rememberEvent } from '../../app/session.js';
 import { now } from '../../core/clock.js';
 import * as storage from '../../core/storage.js';
-import { restorePhotos } from '../../app/actions.js';
+import { restorePhotos } from '../../app/photos.js';
+import { PhotoLayer } from '../photos/layer.js';
 import { toast } from '../ui-store.js';
 import { sfx, haptic } from '../feedback.js';
 import { eventUi, Topbar } from '../screens/event.js';
@@ -13,7 +14,7 @@ import { InboxPopup } from '../screens/inbox.js';
 import { CourseTab } from './course.js';
 import { StandingsTab } from './standings.js';
 import { CompetitionsTab } from './comps.js';
-import { PhotosTab } from './photos.js';
+import { PhotosTab, PhotoPlaces } from './photos.js';
 import { PgMeTab } from './me.js';
 import { ChallengeOverlay, PodiumOverlay } from './overlays.js';
 import { holeTitle } from './common.js';
@@ -38,7 +39,7 @@ export function PgEventApp({ room }) {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
-    eventUi.set({ tab: 'course', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, pgHole: null });
+    eventUi.set({ tab: 'course', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, pgHole: null, camera: false, photo: null });
     rememberEvent(room.code, { name: d.meta.name, host: d.isHost, type: 'pubgolf' });
     restorePhotos(room);
     if (d.isHost && d.players.size <= 1 && !storage.load(`invited:${room.roomId}`)) {
@@ -64,7 +65,7 @@ export function PgEventApp({ room }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
-  const newestPhoto = pg.photos.find((ph) => ph.pid !== room.pid)?.ts || 0;
+  const newestPhoto = d.photos.find((ph) => ph.pid !== room.pid)?.ts || 0;
   useEffect(() => {
     if (tab === 'photos' && newestPhoto > photosSeen) {
       setPhotosSeen(newestPhoto);
@@ -72,7 +73,7 @@ export function PgEventApp({ room }) {
     }
   }, [tab, newestPhoto]);
   const badges = {
-    photos: tab === 'photos' ? 0 : pg.photos.filter((ph) => ph.ts > photosSeen && ph.pid !== room.pid).length,
+    photos: tab === 'photos' ? 0 : d.photos.filter((ph) => ph.ts > photosSeen && ph.pid !== room.pid).length,
     comps: d.inbox.length,
   };
 
@@ -104,5 +105,6 @@ export function PgEventApp({ room }) {
     <${PodiumOverlay} room=${room} d=${d} />
     <${InboxPopup} room=${room} d=${d} />
     <${InviteSheet} room=${room} d=${d} open=${ui.invite} onClose=${() => eventUi.set({ invite: false })} />
+    <${PhotoLayer} room=${room} d=${d} extra=${(photo) => html`<${PhotoPlaces} room=${room} d=${d} photo=${photo} />`} />
   </div>`;
 }

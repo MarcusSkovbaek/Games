@@ -2,6 +2,7 @@
 import { html, useState, useStore, Avatar, Icon, IconButton, Sheet, Switch } from '../kit.js';
 import { setPaused, endEvent, reopenEvent, leaveEvent, appointJudge, shuffleTeams } from '../../app/actions.js';
 import { forgetEvent, session } from '../../app/session.js';
+import { forgetPhotos } from '../../app/photos.js';
 import { prefs, confirmDialog, toast } from '../ui-store.js';
 import { navigate, tvLink } from '../router.js';
 import { formatCode } from '../../core/ids.js';
@@ -47,6 +48,7 @@ export function PgMeTab({ room, d }) {
     if (!ok) return;
     await room.destroy();
     forgetEvent(room.code);
+    forgetPhotos(room.roomId);
     navigate('/');
   };
   const leave = async () => {
@@ -54,6 +56,7 @@ export function PgMeTab({ room, d }) {
     if (!ok) return;
     leaveEvent(room);
     forgetEvent(room.code);
+    forgetPhotos(room.roomId);
     navigate('/');
   };
   const shuffle = async () => {

@@ -1,5 +1,5 @@
 import { html, useState, useEffect, Button, IconButton, Icon, Avatar, Sheet, Spinner } from '../kit.js';
-import { normalizeCode, isValidCode, formatCode, CODE_LENGTH } from '../../core/ids.js';
+import { normalizeCode, isValidCode, formatCode, CODE_LENGTH, LEGACY_CODE_LENGTH } from '../../core/ids.js';
 import { closeEvent, openEvent, rememberEvent } from '../../app/session.js';
 import { now } from '../../core/clock.js';
 import { ProfileForm } from './profile.js';
@@ -16,14 +16,13 @@ export function JoinCode({ initial }) {
   const code = normalizeCode(value);
 
   const onInput = (e) => {
-    const raw = normalizeCode(e.currentTarget.value).slice(0, CODE_LENGTH);
-    setValue(raw.length > 4 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw);
+    setValue(formatCode(normalizeCode(e.currentTarget.value).slice(0, CODE_LENGTH)));
     setError(null);
   };
   const submit = (e) => {
     e.preventDefault();
     if (!isValidCode(code)) {
-      setError(code.length < CODE_LENGTH ? `Koden har ${CODE_LENGTH} tegn.` : 'Koden ser ikke rigtig ud — tjek den igen.');
+      setError(code.length < CODE_LENGTH && code.length !== LEGACY_CODE_LENGTH ? `Koden har ${CODE_LENGTH} tegn.` : 'Koden ser ikke rigtig ud — tjek den igen.');
       return;
     }
     navigate(`/e/${code}`);
@@ -44,14 +43,14 @@ export function JoinCode({ initial }) {
         autocomplete="off"
         autocorrect="off"
         spellcheck=${false}
-        placeholder="XXXX-XXXX"
+        placeholder="XXXX-XXXX-XXXX"
         aria-label="Eventkode"
         value=${value}
         onInput=${onInput}
         autofocus
       />
       ${error ? html`<div class="form-error" role="alert"><${Icon} name="info" size=${18} />${error}</div>` : null}
-      <${Button} type="submit" size="lg" block disabled=${code.length < CODE_LENGTH} iconRight="chevron-right">Find event<//>
+      <${Button} type="submit" size="lg" block disabled=${code.length !== CODE_LENGTH && code.length !== LEGACY_CODE_LENGTH} iconRight="chevron-right">Find event<//>
     </form>
   </main>`;
 }

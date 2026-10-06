@@ -7,7 +7,10 @@ import { buildInstances, phaseOf, isPausedAt, RESULT_GRACE_MS } from './schedule
 import { gameById } from '../minigames/index.js';
 import { hashString } from '../core/rng.js';
 import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
-import { derivePubGolf } from './pubgolf.js';
+import { derivePubGolf, officialsOf } from './pubgolf.js';
+import { derivePhotos } from './photos.js';
+
+const AFTER_END = new Set(['ack', 'react', 'photo', 'phide', 'pghide']);
 
 // Player identity colours: a categorical palette validated for colour-blind separation and
 // contrast against the app's dark surface. Assigned in fixed slot order as players join.
@@ -105,7 +108,8 @@ export function derive(room, t) {
   for (const item of all) {
     const { pid, e } = item;
     if (e.t === 'x' || voided.has(`${pid}:${e.id}`)) continue;
-    if (ended && e.ts > ended && e.t !== 'ack' && e.t !== 'react') continue;
+    // After the end only acknowledgements, reactions and photos still come in.
+    if (ended && e.ts > ended && !AFTER_END.has(e.t)) continue;
     (by[e.t] ||= []).push(item);
     entryIndex.set(`${pid}:${e.id}`, item);
   }
@@ -404,8 +408,14 @@ export function derive(room, t) {
   }
   for (const { pid, e } of list('pause')) feed.push({ key: `${pid}:${e.id}`, ts: e.ts, kind: 'pause', pid, on: !!e.on });
 
-  // Pub golf events: course, teams, scores, competitions and photos.
-  const pg = meta?.type === 'pubgolf' ? derivePubGolf({ meta, players, list, assets, t, me }) : null;
+  // Photos from the evening. The host can hide anyone's — in pub golf so can the judge.
+  const officials = meta?.type === 'pubgolf' ? officialsOf(meta) : null;
+  const canHide = (pid, ts) => pid === meta?.hostId || !!officials?.officialAt(pid, ts);
+  const { photos, photoByKey } = derivePhotos({ list, assets, canHide });
+  for (const photo of photos) feed.push({ key: photo.key, ts: photo.ts, kind: 'photo', pid: photo.pid, photo });
+
+  // Pub golf events: course, teams, scores and competitions.
+  const pg = meta?.type === 'pubgolf' ? derivePubGolf({ meta, players, list, photoByKey, t, me }) : null;
   if (pg) feed.push(...pg.feed);
   feed.sort((a, b) => b.ts - a.ts);
 
@@ -452,6 +462,9 @@ export function derive(room, t) {
     reactions,
     tour,
     toasts,
+    photos,
+    photoByKey,
+    canHidePhotos: canHide(me, t),
     pg,
     leaderChanges,
     totals,

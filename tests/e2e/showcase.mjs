@@ -1,13 +1,63 @@
 // Regenerates the README screenshots in docs/screenshots/ (npm run screenshots).
 import { fileURLToPath } from 'node:url';
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { chromium } from 'playwright';
 import { setup } from './lib.mjs';
-import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin, createPubGolf, joinPubGolf } from './helpers.mjs';
+import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin, createPubGolf, joinPubGolf, pickPhoto } from './helpers.mjs';
 
 const OUT = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const save = (page, name) => page.screenshot({ path: `${OUT}${name}.jpg`, type: 'jpeg', quality: 82 });
 
-const env = await setup();
+// What the fake camera films: a party scene instead of Chromium's green test pattern. Written as a
+// one-frame .y4m video (YUV 4:2:0), which Chromium loops.
+async function partyScene() {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 720, height: 1280 } });
+  await page.setContent(
+    `<body style="margin:0"><div style="position:relative;width:720px;height:1280px;overflow:hidden;background:radial-gradient(circle at 30% 18%,#ffd36b,#ff6a88 42%,#3b1f6e 78%)">
+      <div style="position:absolute;left:90px;top:300px;font-size:300px">🥳</div>
+      <div style="position:absolute;left:360px;top:640px;font-size:240px;transform:rotate(12deg)">🍻</div>
+      <div style="position:absolute;left:40px;top:860px;font-size:150px;transform:rotate(-14deg)">🎉</div>
+      <div style="position:absolute;left:470px;top:150px;font-size:120px">✨</div>
+    </div></body>`,
+  );
+  const png = await page.screenshot({ type: 'png' });
+  const yuv = await page.evaluate(async (b64) => {
+    const img = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob());
+    const c = new OffscreenCanvas(img.width, img.height);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const { data, width: w, height: h } = ctx.getImageData(0, 0, img.width, img.height);
+    const out = new Uint8Array(w * h * 1.5);
+    for (let i = 0; i < w * h; i++) out[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+    const cw = w / 2;
+    for (let y = 0; y < h / 2; y++) {
+      for (let x = 0; x < cw; x++) {
+        let r = 0, g = 0, b = 0;
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+          const p = ((y * 2 + dy) * w + x * 2 + dx) * 4;
+          r += data[p] / 4;
+          g += data[p + 1] / 4;
+          b += data[p + 2] / 4;
+        }
+        out[w * h + y * cw + x] = -0.168736 * r - 0.331264 * g + 0.5 * b + 128;
+        out[w * h * 1.25 + y * cw + x] = 0.5 * r - 0.418688 * g - 0.081312 * b + 128;
+      }
+    }
+    let s = '';
+    for (let i = 0; i < out.length; i += 0x8000) s += String.fromCharCode(...out.subarray(i, i + 0x8000));
+    return btoa(s);
+  }, png.toString('base64'));
+  await browser.close();
+  const file = join(tmpdir(), 'skaal-party.y4m');
+  writeFileSync(file, Buffer.concat([Buffer.from('YUV4MPEG2 W720 H1280 F30:1 Ip A1:1 C420jpeg\nFRAME\n'), Buffer.from(yuv, 'base64')]));
+  return file;
+}
+
+const env = await setup({ fakeVideo: await partyScene() });
 try {
   const host0 = await env.phone('Mads');
   await host0.page.goto(env.appUrl('#/'));
@@ -101,6 +151,42 @@ try {
   await sara.page.getByRole('button', { name: /Skål! 🥂/ }).click();
   await dismissPopups(all);
 
+  // Photos from the evening: Anna takes one with the camera, Bo and Sara share from their roll.
+  await tab(anna, 'Drik');
+  await anna.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+  await anna.page.waitForSelector('.camera__video.is-on', { timeout: 10000 });
+  await wait(1200);
+  await save(anna.page, '20-kamera');
+  await anna.page.getByRole('button', { name: 'Tag billede', exact: true }).click();
+  await anna.page.waitForSelector('.camera__review');
+  await anna.page.fill('.camera__form input', 'Skål for værten! 🥂');
+  await anna.page.getByRole('button', { name: 'Del med alle' }).click();
+  await anna.page.waitForSelector('.camera__last:not(.is-empty)');
+  await anna.page.getByRole('button', { name: 'Luk kameraet' }).click();
+  await logDrink(bo, 'Shot', 1);
+  await pickPhoto(bo, await photoOf(env.browser, '🎤', '#a18cd1,#fbc2eb'), 'Karaoke-tid 🎶');
+  await logDrink(sara, 'Øl', 1);
+  await pickPhoto(sara, await photoOf(env.browser, '🕺', '#84fab0,#8fd3f4'), 'Dansegulvet er åbent');
+  await dismissPopups(all);
+  for (const ph of [bo, sara]) {
+    await ph.page.locator('.toast', { hasText: 'delte et billede' }).first().getByRole('button', { name: 'Se' }).click().catch(() => {});
+    await ph.page.getByRole('button', { name: 'Luk', exact: true }).click().catch(() => {});
+  }
+  await tab(host, 'Feed');
+  await host.page.waitForFunction(() => document.querySelectorAll('.feed-photo').length >= 3, null, { timeout: 10000 });
+  await wait(5500); // let the photos sharpen and the toasts fade
+  await save(host.page, '21-feed-fotos');
+  await host.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
+  await wait(600);
+  await save(host.page, '22-fotos');
+  await host.page.locator('.photo-tile', { hasText: 'Bo' }).click();
+  await host.page.locator('.viewer__like').click();
+  await host.page.waitForFunction(() => getComputedStyle(document.querySelector('.viewer__photo')).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+  await wait(600);
+  await save(host.page, '23-billede');
+  await host.page.getByRole('button', { name: 'Luk', exact: true }).click();
+  await host.page.locator('.segmented__opt', { hasText: 'Alt' }).click();
+
   // Tour de France: the host switches the mode on; Sara rides to 20 drinks and logs the 21st.
   await tab(host, 'Mig');
   await host.page.getByText('Event-indstillinger').click();
@@ -160,25 +246,15 @@ try {
   await save(gSara.page, '16-pubgolf-stilling');
 
   // Photos, and the photo competition's podium on every phone.
-  const shares = [
-    [gAnna, '🍻', '#f6d365,#fda085', 'Skål fra Heidis!'],
-    [gBo, '⛳', '#84fab0,#8fd3f4', 'Hold Blå på green'],
-    [gSara, '🎤', '#a18cd1,#fbc2eb', 'Karaoke på Kihoskh'],
-  ];
-  for (const [ph, emoji, colors, caption] of shares) {
-    await tab(ph, 'Fotos');
-    await ph.page.setInputFiles('.pg-upload input[type=file]', { name: 'photo.jpg', mimeType: 'image/jpeg', buffer: await photoOf(env.browser, emoji, colors) });
-    await ph.page.waitForSelector('.pg-share__img');
-    await ph.page.fill('input[placeholder^="Skriv en tekst"]', caption);
-    await ph.page.getByRole('button', { name: 'Del med alle' }).click();
-    await ph.page.waitForSelector('.sheet.is-open', { state: 'detached' });
-  }
+  await pickPhoto(gAnna, await photoOf(env.browser, '🍻', '#f6d365,#fda085'), 'Skål fra Heidis!');
+  await pickPhoto(gBo, await photoOf(env.browser, '⛳', '#84fab0,#8fd3f4'), 'Hold Blå på green');
+  await pickPhoto(gSara, await photoOf(env.browser, '🎤', '#a18cd1,#fbc2eb'), 'Karaoke på Kihoskh');
   await tab(judge, 'Fotos');
-  await judge.page.waitForFunction(() => document.querySelectorAll('.pg-tile > img').length === 3, null, { timeout: 10000 });
+  await judge.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 3, null, { timeout: 10000 });
   for (const [i, name] of ['Anna', 'Sara', 'Bo'].entries()) {
-    await judge.page.locator('.pg-tile', { hasText: name }).click();
-    await judge.page.getByRole('button', { name: new RegExp(`${i + 1}\\.-plads`) }).click();
-    await judge.page.locator('.sheet.is-open .sheet__close').click();
+    await judge.page.locator('.photo-tile', { hasText: name }).click();
+    await judge.page.locator('.viewer__places').getByRole('button', { name: new RegExp(`${i + 1}\\.-plads`) }).click();
+    await judge.page.getByRole('button', { name: 'Luk', exact: true }).click();
     await wait(400);
   }
   await gBo.page.waitForSelector('.pg-moment--podium .pg-stage__photo + .pg-stage__name', { timeout: 6000 });
