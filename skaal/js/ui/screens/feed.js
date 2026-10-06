@@ -10,7 +10,8 @@ import { FeedPhoto, PhotoGrid } from '../photos/photo.js';
 import { CameraCard } from '../photos/layer.js';
 import { eventUi } from './event.js';
 
-const REACTIONS = ['🍻', '🔥', '😂', '👑', '😱'];
+// ❤️ is also the like in the photo viewer, so likes given there show here too.
+const REACTIONS = ['❤️', '🍻', '🔥', '😂', '👑', '😱'];
 
 function glyphFor(item) {
   switch (item.kind) {

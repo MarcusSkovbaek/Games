@@ -5,6 +5,8 @@ import { fmtPoints, fmtDecimal, fmtSince } from '../format.js';
 import { confetti, sfx } from '../feedback.js';
 import { reopenEvent } from '../../app/actions.js';
 import { navigate } from '../router.js';
+import { PhotoOfTheNight } from '../photos/photo.js';
+import { eventUi } from './event.js';
 
 export function awardsFor(d) {
   const ps = d.ranking.filter((p) => p.alcoholic || p.water || p.sipsTaken || p.sipsGiven);
@@ -79,6 +81,15 @@ export function FinalScreen({ room, d, onTab }) {
         <div class="stat"><div class="stat__value">${d.ranking.length}</div><div class="stat__label">Deltagere</div></div>
         <div class="stat"><div class="stat__value">${d.games.filter((g) => g.result).length}</div><div class="stat__label">Minigames</div></div>
       </div>
+
+      <${PhotoOfTheNight}
+        room=${room}
+        d=${d}
+        onAll=${() => {
+          eventUi.set({ feedView: 'photos' });
+          onTab('feed');
+        }}
+      />
 
       ${awards.length
         ? html`<section class="section">

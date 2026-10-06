@@ -702,6 +702,21 @@ const scenarios = {
     assert.deepEqual(blocked.slice(0, 2), [true, true], 'context menu and dragging are blocked');
     assert.deepEqual(await axeViolations(bo.page, axeSource), [], 'the viewer is accessible');
     await shot(bo.page, 'e2e-viewer');
+    // Focus moves into the viewer and Tab stays there.
+    assert.equal(await bo.page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Luk');
+    for (let i = 0; i < 6; i++) await bo.page.keyboard.press('Tab');
+    assert.ok(await bo.page.evaluate(() => !!document.activeElement?.closest('.viewer')), 'Tab stays inside the viewer');
+    // Double-tap (double-click) zooms in and back out; + and 0 do the same.
+    const stage = await bo.page.locator('.viewer__stage').boundingBox();
+    await bo.page.mouse.dblclick(stage.x + stage.width / 2, stage.y + stage.height / 2);
+    await bo.page.waitForSelector('.viewer__stage.is-zoomed');
+    assert.match(await bo.page.locator('.viewer__photo').getAttribute('style'), /scale\(2\.5\)/);
+    await bo.page.mouse.dblclick(stage.x + stage.width / 2, stage.y + stage.height / 2);
+    await bo.page.waitForSelector('.viewer__stage:not(.is-zoomed)');
+    await bo.page.keyboard.press('+');
+    await bo.page.waitForSelector('.viewer__stage.is-zoomed');
+    await bo.page.keyboard.press('0');
+    await bo.page.waitForSelector('.viewer__stage:not(.is-zoomed)');
     await bo.page.locator('.viewer__like').click();
     await bo.page.getByRole('button', { name: 'Luk', exact: true }).click();
     await bo.page.waitForSelector('.viewer', { state: 'detached' });
@@ -713,6 +728,7 @@ const scenarios = {
     assert.deepEqual(await derived(host, (d) => d.feed.filter((f) => f.kind === 'photo' || f.kind === 'drink').map((f) => f.kind)), ['photo', 'drink']);
     assert.equal(await host.page.locator('.feed-item').first().locator('.feed-photo').count(), 1, 'the newest item is the photo');
     await host.page.waitForFunction(() => getComputedStyle(document.querySelector('.feed-photo .photo-frame')).backgroundImage.includes('blob:'), null, { timeout: 10000 });
+    assert.match(await host.page.locator('.feed-item').first().locator('.react').first().textContent(), /❤️ 1/, 'Bo’s like shows in the feed too');
     assert.deepEqual(await axeViolations(host.page, axeSource), [], 'the feed with photos is accessible');
     await shot(host.page, 'e2e-feed-photo');
 
@@ -803,6 +819,24 @@ const scenarios = {
     await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Uden net' && ph.thumb), null, { timeout: 30000 });
     const offline = await derived(bo, (d) => d.photos.find((ph) => ph.cap === 'Uden net').asset);
     await bo.page.waitForFunction((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !!b), offline, { timeout: 15000 });
+
+    // When the host ends the event, the most liked photo is the photo of the night.
+    await tab(bo, 'Feed');
+    await bo.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
+    await bo.page.locator('.photo-tile', { hasText: 'Dennis' }).click();
+    await bo.page.locator('.viewer__like').click();
+    await bo.page.keyboard.press('Escape');
+    await tab(host, 'Mig');
+    await host.page.getByRole('button', { name: /Afslut eventet/ }).click();
+    await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Afslut event', exact: true }).click();
+    await host.page.waitForSelector('.potn', { timeout: 8000 });
+    assert.match(await host.page.locator('.potn').textContent(), /Dennis.*❤️ 1/s);
+    await host.page.locator('.potn').click();
+    await host.page.waitForSelector('.viewer');
+    assert.equal(await host.page.locator('.viewer__cap').textContent(), 'Fra kamerarullen');
+    await host.page.keyboard.press('Escape');
+    await host.page.getByRole('button', { name: /Genåbn eventet/ }).click();
+    await host.page.waitForSelector('.tabbar');
 
     // The host can turn photos off (and on again) …
     await tab(host, 'Mig');

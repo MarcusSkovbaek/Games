@@ -2,7 +2,7 @@
 // <img> — so the browser offers no "save image", no long-press menu and no dragging it out.
 // Thumbnails are on every phone already; the full-size photo is fetched (and decrypted) only when
 // someone looks at it.
-import { html, useState, useEffect, useRef, useStore, Avatar, Icon, IconButton, Spinner, cx } from '../kit.js';
+import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, Avatar, Button, Icon, IconButton, Spinner, cx } from '../kit.js';
 import { loadFull, cachedFull, removePhoto } from '../../app/photos.js';
 import { toggleReaction } from '../../app/actions.js';
 import { eventUi } from '../screens/event.js';
@@ -119,8 +119,8 @@ export function PhotoViewer({ room, d, extra }) {
   const index = photos.findIndex((ph) => ph.key === key);
   const photo = index >= 0 ? photos[index] : null;
   const [confirm, setConfirm] = useState(false);
-  const [drag, setDrag] = useState(0);
-  const start = useRef(null);
+  const root = useRef(null);
+  useModalFocus(root, !!photo);
   const close = () => eventUi.set({ photo: null });
   const go = (step) => {
     const next = photos[index + step];
@@ -137,7 +137,8 @@ export function PhotoViewer({ room, d, extra }) {
   // The keys always act on the photo shown now (the handler outlives the render it was made in).
   const keys = useRef(null);
   keys.current = { close, go };
-  useEffect(() => {
+  // (A layout effect, so the keys work from the moment the viewer is on screen.)
+  useLayoutEffect(() => {
     if (!photo) return undefined;
     document.documentElement.classList.add('scroll-locked', 'media-open');
     const onKey = (e) => {
@@ -177,52 +178,21 @@ export function PhotoViewer({ room, d, extra }) {
     toast(mine ? 'Billedet er slettet for alle' : 'Billedet er skjult for alle', { icon: '🗑️' });
     setConfirm(false);
   };
-  const onDown = (e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    start.current = { x: e.clientX, y: e.clientY, t: Date.now() };
-  };
-  const onMove = (e) => {
-    if (!start.current) return;
-    const dx = e.clientX - start.current.x;
-    if (Math.abs(dx) > Math.abs(e.clientY - start.current.y)) setDrag(dx);
-  };
-  const onUp = (e) => {
-    if (!start.current) return;
-    const dx = e.clientX - start.current.x;
-    const dy = e.clientY - start.current.y;
-    const fast = Date.now() - start.current.t < 300;
-    start.current = null;
-    setDrag(0);
-    if (Math.abs(dx) > Math.max(60, Math.abs(dy)) || (fast && Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy))) go(dx < 0 ? 1 : -1);
-    else if (dy > 110 && Math.abs(dy) > Math.abs(dx) * 1.5) close();
-  };
-
-  return html`<div class="viewer" role="dialog" aria-modal="true" aria-label=${photoLabel(d, photo)} onContextMenu=${block}>
+  return html`<div class="viewer" ref=${root} tabindex="-1" role="dialog" aria-modal="true" aria-label=${photoLabel(d, photo)} onContextMenu=${block}>
     <header class="viewer__top">
       <${Avatar} player=${p} size=${36} />
       <span class="viewer__who">
         <strong>${mine ? 'Dig' : p?.name || 'En gæst'}</strong>
         <small>${fmtAgo(photo.ts, d.t)} · ${index + 1} af ${photos.length}</small>
       </span>
-      <${IconButton} icon="x" label="Luk" onClick=${close} />
+      <${IconButton} icon="x" label="Luk" onClick=${close} data-autofocus />
     </header>
-    <div
-      class="viewer__stage"
-      onPointerDown=${onDown}
-      onPointerMove=${onMove}
-      onPointerUp=${onUp}
-      onPointerCancel=${() => {
-        start.current = null;
-        setDrag(0);
-      }}
-      style=${{ '--dx': `${drag}px` }}
-    >
-      <${PhotoFrame} src=${full.url || photo.thumb} fit="contain" label=${photoLabel(d, photo)} class=${cx('viewer__photo', !full.url && 'is-thumb')} />
+    <${ZoomStage} photoKey=${photo.key} src=${full.url || photo.thumb} label=${photoLabel(d, photo)} onStep=${go} onClose=${close}>
       ${!full.url && !full.failed && photo.full ? html`<span class="viewer__loading"><${Spinner} size=${30} /></span>` : null}
       ${full.failed ? html`<span class="viewer__note">Fuld størrelse er ikke tilgængelig lige nu — du ser en mindre udgave.</span>` : null}
       ${index > 0 ? html`<button type="button" class="viewer__nav viewer__nav--prev" aria-label="Forrige billede" onClick=${() => go(-1)}><${Icon} name="chevron-left" size=${26} /></button>` : null}
       ${index < photos.length - 1 ? html`<button type="button" class="viewer__nav viewer__nav--next" aria-label="Næste billede" onClick=${() => go(1)}><${Icon} name="chevron-right" size=${26} /></button>` : null}
-    </div>
+    <//>
     <footer class="viewer__bottom">
       ${photo.cap ? html`<p class="viewer__cap">${photo.cap}</p>` : null}
       ${confirm
@@ -243,4 +213,166 @@ export function PhotoViewer({ room, d, extra }) {
       ${extra ? extra(photo) : null}
     </footer>
   </div>`;
+}
+
+const RESET = { s: 1, x: 0, y: 0, dx: 0, live: false };
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+// The photo in the viewer: swipe for the next one, double-tap or pinch to zoom, drag to look
+// around while zoomed (on a computer: double-click, ctrl/⌘ + scroll, or + / − / 0).
+function ZoomStage({ photoKey, src, label, onStep, onClose, children }) {
+  const [view, setView] = useState(RESET);
+  const stage = useRef(null);
+  const pointers = useRef(new Map());
+  const gesture = useRef(null);
+  const lastTap = useRef(null);
+  useEffect(() => setView(RESET), [photoKey]);
+
+  const box = () => {
+    const r = stage.current.getBoundingClientRect();
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width, h: r.height };
+  };
+  // Never zoom out past the whole photo, and never pan it out of the frame.
+  const clamp = (v) => {
+    const { w, h } = box();
+    const s = Math.min(4, Math.max(1, v.s));
+    const mx = ((s - 1) * w) / 2;
+    const my = ((s - 1) * h) / 2;
+    return { ...v, s, x: Math.max(-mx, Math.min(mx, v.x)), y: Math.max(-my, Math.min(my, v.y)) };
+  };
+  // Zoom to s, keeping the point under (px, py) where it is.
+  const zoomAt = (s, px, py, base) => {
+    const { cx, cy } = box();
+    const qx = px - cx;
+    const qy = py - cy;
+    const k = Math.min(4, Math.max(1, s)) / base.s;
+    return clamp({ ...base, s, x: qx - (qx - base.x) * k, y: qy - (qy - base.y) * k });
+  };
+
+  useLayoutEffect(() => {
+    const onKey = (e) => {
+      if (e.key === '+' || e.key === '=') setView((v) => ({ ...zoomAt(v.s * 1.6, box().cx, box().cy, v), live: false }));
+      else if (e.key === '-' || e.key === '0') setView(RESET);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const onDown = (e) => {
+    if (e.target.closest('button') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    stage.current.setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      gesture.current = { type: 'pinch', d0: dist(a, b) || 1, m0: mid(a, b), base: view };
+    } else if (pointers.current.size === 1) {
+      gesture.current = { type: view.s > 1 ? 'pan' : 'swipe', x0: e.clientX, y0: e.clientY, t0: Date.now(), base: view };
+    }
+  };
+  const onMove = (e) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    if (!g) return;
+    if (g.type === 'pinch' && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const m = mid(a, b);
+      const z = zoomAt((g.base.s * dist(a, b)) / g.d0, g.m0.x, g.m0.y, g.base);
+      setView(clamp({ ...z, x: z.x + m.x - g.m0.x, y: z.y + m.y - g.m0.y, dx: 0, live: true }));
+    } else if (g.type === 'pan') {
+      setView(clamp({ ...g.base, x: g.base.x + e.clientX - g.x0, y: g.base.y + e.clientY - g.y0, live: true }));
+    } else if (g.type === 'swipe') {
+      const dx = e.clientX - g.x0;
+      if (Math.abs(dx) > Math.abs(e.clientY - g.y0)) setView((v) => ({ ...v, dx, live: true }));
+    }
+  };
+  const onUp = (e) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.delete(e.pointerId);
+    const g = gesture.current;
+    if (pointers.current.size === 1 && g?.type === 'pinch') {
+      // One finger stays down: carry on looking around from here.
+      const [p] = [...pointers.current.values()];
+      gesture.current = { type: 'pan', x0: p.x, y0: p.y, t0: 0, base: view };
+      return;
+    }
+    if (pointers.current.size || !g) return;
+    gesture.current = null;
+    const dx = e.clientX - g.x0;
+    const dy = e.clientY - g.y0;
+    if (g.type !== 'pinch' && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      // A tap — two in a row zoom in, or back out.
+      const now = Date.now();
+      const prev = lastTap.current;
+      if (prev && now - prev.t < 320 && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 30) {
+        lastTap.current = null;
+        setView((v) => (v.s > 1 ? RESET : { ...zoomAt(2.5, e.clientX, e.clientY, v), live: false }));
+      } else {
+        lastTap.current = { t: now, x: e.clientX, y: e.clientY };
+        setView((v) => ({ ...v, dx: 0, live: false }));
+      }
+      return;
+    }
+    if (g.type === 'swipe') {
+      setView((v) => ({ ...v, dx: 0, live: false }));
+      const fast = Date.now() - g.t0 < 300;
+      if (Math.abs(dx) > Math.max(60, Math.abs(dy)) || (fast && Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy))) onStep(dx < 0 ? 1 : -1);
+      else if (dy > 110 && Math.abs(dy) > Math.abs(dx) * 1.5) onClose();
+      return;
+    }
+    setView((v) => (v.s < 1.05 ? RESET : { ...v, live: false }));
+  };
+  const onCancel = (e) => {
+    pointers.current.delete(e.pointerId);
+    if (!pointers.current.size) {
+      gesture.current = null;
+      setView((v) => ({ ...v, dx: 0, live: false }));
+    }
+  };
+  const onWheel = (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setView((v) => ({ ...zoomAt(v.s * Math.exp(-e.deltaY / 200), e.clientX, e.clientY, v), live: false }));
+  };
+
+  return html`<div
+    class=${cx('viewer__stage', view.s > 1 && 'is-zoomed')}
+    ref=${stage}
+    onPointerDown=${onDown}
+    onPointerMove=${onMove}
+    onPointerUp=${onUp}
+    onPointerCancel=${onCancel}
+    onWheel=${onWheel}
+  >
+    <${PhotoFrame}
+      src=${src}
+      fit="contain"
+      label=${label}
+      class="viewer__photo"
+      style=${{ transform: `translate(${view.x + view.dx}px, ${view.y}px) scale(${view.s})`, transition: view.live ? 'none' : 'transform 0.25s var(--ease)' }}
+    />
+    ${children}
+  </div>`;
+}
+
+// The final screen: the evening's most liked photo, and the way to all of them.
+export function PhotoOfTheNight({ room, d, onAll }) {
+  const best = d.photos.reduce((a, b) => (!a || likesOf(d, b.key) > likesOf(d, a.key) ? b : a), null);
+  const full = useFullPhoto(room, best, !!best);
+  if (!best) return null;
+  const likes = likesOf(d, best.key);
+  const p = d.players.get(best.pid);
+  return html`<section class="section">
+    <h2 class="section__title">📸 ${likes ? 'Aftenens billede' : 'Aftenens seneste billede'}</h2>
+    <button type="button" class="potn" style=${{ aspectRatio: String(ratio(best)) }} onClick=${() => eventUi.set({ photo: best.key })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, best)}`}>
+      <${PhotoFrame} src=${full.url || best.thumb} />
+      <span class="potn__foot" aria-hidden="true">
+        <${Avatar} player=${p} size=${28} />
+        <span class="potn__who"><strong>${p?.isMe ? 'Dig' : p?.name}</strong>${best.cap ? html` — ${best.cap}` : null}</span>
+        ${likes ? html`<span class="potn__likes">${LIKE} ${likes}</span>` : null}
+      </span>
+    </button>
+    ${d.photos.length > 1 ? html`<${Button} variant="secondary" block icon="image" onClick=${onAll}>Se alle ${d.photos.length} billeder<//>` : null}
+  </section>`;
 }

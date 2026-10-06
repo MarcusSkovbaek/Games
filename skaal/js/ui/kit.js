@@ -305,6 +305,39 @@ function lockScroll(on) {
   document.documentElement.classList.toggle('sheet-open', sheetDepth > 0);
 }
 
+// Full-screen dialogs (camera, photo viewer): focus moves in (to [data-autofocus] if there is
+// one), Tab stays inside, and focus goes back where it was when the dialog closes.
+export function useModalFocus(ref, active = true) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return undefined;
+    const before = document.activeElement;
+    (el.querySelector('[data-autofocus]') || el).focus({ preventScroll: true });
+    const onKey = (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [...el.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter(
+        (x) => x.offsetParent !== null,
+      );
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const inside = el.contains(document.activeElement);
+      if (e.shiftKey && (!inside || document.activeElement === first || document.activeElement === el)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (!inside || document.activeElement === last)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (before && document.contains(before)) before.focus?.({ preventScroll: true });
+    };
+  }, [active]);
+}
+
 // Bottom sheet. Closes on backdrop tap, Escape or a downward swipe on the handle.
 export function Sheet({ open, onClose, title, subtitle, label, children, footer, size = 'auto', class: className, dismissible = true }) {
   const [mounted, setMounted] = useState(open);

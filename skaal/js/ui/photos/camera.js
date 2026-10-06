@@ -2,7 +2,7 @@
 // look at the picture before it is shared. Photos taken here never land in the phone's camera
 // roll — they only exist inside the event. Where the browser can't open the camera directly, the
 // phone's own camera (or the camera roll) is used instead.
-import { html, useState, useEffect, useRef, useStore, Icon, IconButton, Button, Spinner, cx } from '../kit.js';
+import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, Icon, IconButton, Button, Spinner, cx } from '../kit.js';
 import { preparePhoto, bitmapFromFile, sharePhoto, PHOTO } from '../../app/photos.js';
 import { eventUi } from '../screens/event.js';
 import { prefs, toast } from '../ui-store.js';
@@ -33,6 +33,8 @@ export function CameraOverlay({ room }) {
 }
 
 function Camera({ room, onClose }) {
+  const root = useRef(null);
+  useModalFocus(root);
   const video = useRef(null);
   const stream = useRef(null);
   const [facing, setFacing] = useState(() => prefs.get().cameraFacing || 'environment');
@@ -62,6 +64,8 @@ function Camera({ room, onClose }) {
       const s = await openStream(which);
       stream.current = s;
       const track = s.getVideoTracks()[0];
+      // Another app took the camera (or it was unplugged): say so and offer to try again.
+      if (track) track.onended = () => stream.current === s && setStatus('unavailable');
       const caps = track?.getCapabilities?.() || {};
       setTorch({ can: !!caps.torch, on: false });
       if (video.current) {
@@ -92,6 +96,15 @@ function Camera({ room, onClose }) {
   }, []);
 
   useEffect(() => () => shot?.url && URL.revokeObjectURL(shot.url), [shot]);
+
+  // Escape: from the review back to the camera, from the camera out.
+  const escape = useRef(null);
+  escape.current = () => (shot ? setShot(null) : onClose());
+  useLayoutEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && !e.defaultPrevented && escape.current();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const flip = () => {
     const next = facing === 'user' ? 'environment' : 'user';
@@ -206,7 +219,7 @@ function Camera({ room, onClose }) {
       <${Icon} name=${icon} size=${label ? 20 : 24} />${label}
     </label>`;
 
-  return html`<div class="camera" role="dialog" aria-modal="true" aria-label="Kamera">
+  return html`<div class="camera" ref=${root} tabindex="-1" role="dialog" aria-modal="true" aria-label="Kamera">
     <video ref=${video} class=${cx('camera__video', facing === 'user' && 'is-mirrored', status === 'live' && !shot && 'is-on')} autoplay muted playsinline aria-hidden="true"></video>
     ${blink ? html`<div class="camera__blink" key=${blink} aria-hidden="true"></div>` : null}
     ${lit ? html`<div class="camera__lit" aria-hidden="true"></div>` : null}
@@ -244,7 +257,7 @@ function Camera({ room, onClose }) {
             ${status === 'starting' ? html`<div class="camera__wait"><${Spinner} size=${30} /><span>Starter kameraet …</span></div>` : null}
             <div class="camera__controls">
               ${filePicker('', 'image', { name: 'Vælg fra kamerarullen' })}
-              <button type="button" class=${cx('camera__shutter', count && 'is-counting')} aria-label=${count ? 'Stop selvudløseren' : 'Tag billede'} onClick=${shutter} disabled=${status !== 'live' || busy}>
+              <button type="button" data-autofocus class=${cx('camera__shutter', count && 'is-counting')} aria-label=${count ? 'Stop selvudløseren' : 'Tag billede'} onClick=${shutter} disabled=${status !== 'live' || busy}>
                 <span></span>
               </button>
               ${last
@@ -262,7 +275,7 @@ function Camera({ room, onClose }) {
             <div class="stack">
               ${filePicker('Åbn telefonens kamera', 'camera', { capture: 'environment' })}
               ${filePicker('Vælg fra kamerarullen', 'image')}
-              ${status === 'denied' ? html`<${Button} variant="ghost" onClick=${() => start()}>Prøv igen<//>` : null}
+              <${Button} variant="ghost" onClick=${() => start()}>Prøv kameraet igen<//>
             </div>
           </div>`}
     ${busy && !shot ? html`<div class="camera__busy"><${Spinner} size=${34} /></div>` : null}

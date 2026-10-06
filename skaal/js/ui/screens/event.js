@@ -142,7 +142,7 @@ function EventApp({ room }) {
   const unreadFeed = ui.tab === 'feed' ? 0 : d.feed.filter((f) => f.ts > feedSeen && f.pid !== room.pid && f.kind !== 'join').length;
 
   if (d.ended && ui.tab !== 'board' && ui.tab !== 'feed' && ui.tab !== 'me') {
-    return html`<${FinalScreen} room=${room} d=${d} onTab=${setTab} />`;
+    return html`<${FinalScreen} room=${room} d=${d} onTab=${setTab} /><${PhotoLayer} room=${room} d=${d} />`;
   }
 
   const badges = {

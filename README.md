@@ -103,8 +103,10 @@ tekst, hvis du vil, og tryk *Del med alle*.
 
 - **I feedet:** Billedet dukker op i feedet mellem drinks, førerskifte og lykkehjul, så man kan
   følge aftenen — og alle får en lille besked med en *Se*-knap. Under *Fotos* i feedet ligger alle
-  aftenens billeder samlet, og storskærmen viser de nyeste som et lysbilledshow. Tryk på et billede
-  for at se det i fuld størrelse; stryg til siden for det næste.
+  aftenens billeder samlet, og storskærmen viser de nyeste som et lysbilledshow med bløde
+  overgange. Tryk på et billede for at se det i fuld størrelse: stryg til siden for det næste,
+  dobbelttryk eller knib for at zoome (på en computer: piletaster, dobbeltklik, + / − / 0 og Esc).
+  Når værten afslutter eventet, viser slutskærmen *Aftenens billede* — det med flest ❤️.
 - **Like, slet og skjul:** Alle kan give et ❤️. Man kan slette sine egne billeder, og værten — i
   pub golf også dommeren — kan skjule andres. Begge dele fjerner billedet fra alles telefoner og fra
   serverne. Under **Mig → Fotos** kan værten slå fotos fra og slette alle aftenens billeder på én
