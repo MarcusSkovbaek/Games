@@ -48,7 +48,7 @@ export function PhotosTab({ room, d }) {
     <${CameraCard} room=${room} d=${d} text="Alle i eventet kan se det — de bedste kan vinde fotokonkurrencen" />
 
     ${d.photos.length
-      ? html`<${PhotoGrid} d=${d} photos=${d.photos} badge=${badge} />`
+      ? html`<${PhotoGrid} room=${room} d=${d} photos=${d.photos} badge=${badge} />`
       : html`<${Empty} icon="camera" title="Ingen billeder endnu" text="Tag det første billede — de bedste kan vinde fotokonkurrencen." />`}
   </div>`;
 }

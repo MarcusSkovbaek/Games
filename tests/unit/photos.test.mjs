@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { derive } from '../../skaal/js/game/derive.js';
 import { normalizeSettings, withSchedule } from '../../skaal/js/game/settings.js';
 import { photoPrefix } from '../../skaal/js/game/photos.js';
+import { defaultSettings } from '../../skaal/js/game/settings.js';
 
 const MIN = 60000;
 const T0 = Date.UTC(2026, 9, 10, 20, 0, 0);
@@ -101,4 +102,11 @@ test('photos keep coming after the host ends the event; drinks do not', () => {
   const d = at(room);
   assert.deepEqual(d.photos.map((ph) => ph.cap), ['Efterfest']);
   assert.equal(d.mePlayer.alcoholic, 0);
+});
+
+test('photos are on by default; the host can turn them off', () => {
+  assert.equal(defaultSettings().photos, true);
+  assert.equal(normalizeSettings({}).photos, true);
+  assert.equal(normalizeSettings({ photos: false }).photos, false);
+  assert.equal(normalizeSettings({ photos: 'nej' }).photos, true, 'junk keeps the default');
 });

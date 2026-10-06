@@ -19,6 +19,8 @@ export function defaultSettings() {
     // rider's phone and big screens do).
     tourSong: '',
     tourSongAll: false,
+    // Guests can take photos in the app (see game/photos.js).
+    photos: true,
   };
 }
 
@@ -48,6 +50,7 @@ export function normalizeSettings(raw) {
     tour: bool(s.tour, def.tour),
     tourSong: cleanSongUrl(s.tourSong),
     tourSongAll: bool(s.tourSongAll, def.tourSongAll),
+    photos: bool(s.photos, def.photos),
   };
 }
 

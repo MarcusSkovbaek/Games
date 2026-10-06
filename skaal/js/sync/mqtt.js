@@ -137,8 +137,11 @@ function decodePacket(first, body) {
   }
 }
 
-// Splits a byte stream into packets. Returns the parsed packets and the unconsumed tail.
-export function parsePackets(buf) {
+// Splits a byte stream into packets. Returns the parsed packets, the unconsumed tail, and — when a
+// packet is bigger than `max` — how many bytes of it are still to come and must be thrown away
+// (`skip`). Anyone can publish to a public broker, so a huge message on one of our topics must not
+// be buffered (or bring the connection down).
+export function parsePackets(buf, max = Infinity) {
   const packets = [];
   let off = 0;
   while (buf.length - off >= 2) {
@@ -157,11 +160,19 @@ export function parsePackets(buf) {
       mult *= 128;
       if (!(byte & 0x80)) break;
     }
-    if (incomplete || i + len > buf.length) break;
+    if (incomplete) break;
+    if (len > max) {
+      if (i + len <= buf.length) {
+        off = i + len;
+        continue;
+      }
+      return { packets, rest: new Uint8Array(0), skip: i + len - buf.length };
+    }
+    if (i + len > buf.length) break;
     packets.push(decodePacket(buf[off], buf.subarray(i, i + len)));
     off = i + len;
   }
-  return { packets, rest: buf.slice(off) };
+  return { packets, rest: buf.slice(off), skip: 0 };
 }
 
 export class MqttClient {
@@ -175,8 +186,12 @@ export class MqttClient {
     onStatus = () => {},
     onConnect = () => {},
     WebSocketImpl = globalThis.WebSocket,
+    // Bigger messages are skipped. Ours stay well below (a full-size photo is ~230 KB).
+    maxPacket = 2 * 1024 * 1024,
   }) {
-    Object.assign(this, { url, clientId, keepalive, username, password, onMessage, onStatus, onConnect, WebSocketImpl });
+    Object.assign(this, { url, clientId, keepalive, username, password, onMessage, onStatus, onConnect, WebSocketImpl, maxPacket });
+    this.skip = 0; // bytes of an oversized packet still to throw away
+    this.skipped = 0; // how many oversized packets were thrown away
     this.status = 'idle';
     this.will = null;
     this.subs = new Map(); // topic -> qos
@@ -346,6 +361,7 @@ export class MqttClient {
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
     this.buf = new Uint8Array(0);
+    this.skip = 0;
     this._connectTimer = setTimeout(() => {
       if (this.ws === ws && this.status !== 'online') this._drop('connect-timeout');
     }, 10000);
@@ -376,15 +392,27 @@ export class MqttClient {
 
   _feed(chunk) {
     this.lastRx = Date.now();
+    if (this.skip) {
+      if (chunk.length <= this.skip) {
+        this.skip -= chunk.length;
+        return;
+      }
+      chunk = chunk.subarray(this.skip);
+      this.skip = 0;
+    }
     const data = this.buf.length ? concat([this.buf, chunk]) : chunk;
     let parsed;
     try {
-      parsed = parsePackets(data);
+      parsed = parsePackets(data, this.maxPacket);
     } catch {
       this._drop('protocol-error');
       return;
     }
     this.buf = parsed.rest;
+    if (parsed.skip) {
+      this.skip = parsed.skip;
+      this.skipped++;
+    }
     for (const p of parsed.packets) this._handle(p);
   }
 

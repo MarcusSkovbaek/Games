@@ -27,6 +27,13 @@ import { startBroker } from '../support/broker.mjs';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const only = process.argv[2];
 
+// Whether this phone keeps a file in its own storage (IndexedDB).
+const idbHas = (ph, key) =>
+  ph.page.evaluate(async (k) => {
+    const db = await new Promise((resolve) => (indexedDB.open('skaal-files', 1).onsuccess = (e) => resolve(e.target.result)));
+    return new Promise((resolve) => (db.transaction('files').objectStore('files').get(k).onsuccess = (e) => resolve(e.target.result !== undefined)));
+  }, key);
+
 async function party(env) {
   const { ph: host, code } = await createEvent(env, { photo: await photoOf(env.browser, '😎', '#ff9a8b,#ff6a88') });
   const anna = await joinEvent(env, code, 'Anna', await photoOf(env.browser, '🦊', '#a1c4fd,#c2e9fb'));
@@ -735,13 +742,21 @@ const scenarios = {
     await anna.page.waitForSelector('.viewer', { state: 'detached' });
 
     // The host hides Bo's photo for everyone; Anna deletes her own — gone everywhere, also the
-    // full size on the brokers.
+    // full size on the brokers and the copy on the phone that took it.
+    const bosPhoto = await derived(bo, (d) => d.photos.find((ph) => ph.pid === d.me).asset);
+    assert.equal(await idbHas(bo, `full:${bosPhoto}`), true, 'Bo’s phone keeps an encrypted copy of his photo');
     await tab(host, 'Feed');
     await host.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
     await host.page.locator('.photo-tile', { hasText: 'Bo' }).click();
     await host.page.locator('.viewer__action', { hasText: 'Skjul' }).click();
     await host.page.locator('.viewer__confirm .btn--danger').click();
     await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 1, null, { timeout: 8000 });
+    await anna.page.waitForFunction((a) => window.__skaal.session.get().room.state.assets[a]?.data === null, bosPhoto, { timeout: 8000 });
+    assert.equal(await anna.page.evaluate((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => b?.length ?? null), bosPhoto), null, 'a hidden photo leaves the brokers too');
+    await bo.page.waitForFunction(async (k) => {
+      const db = await new Promise((resolve) => (indexedDB.open('skaal-files', 1).onsuccess = (e) => resolve(e.target.result)));
+      return new Promise((resolve) => (db.transaction('files').objectStore('files').get(k).onsuccess = (e) => resolve(e.target.result === undefined)));
+    }, `full:${bosPhoto}`, { timeout: 8000 });
     await anna.page.locator('.photo-tile').click();
     await anna.page.locator('.viewer__action', { hasText: 'Slet' }).click();
     await anna.page.locator('.viewer__confirm .btn--danger').click();
@@ -774,6 +789,36 @@ const scenarios = {
     await pickPhoto(denied, await photoOf(env.browser, '🎉', '#f6d365,#fda085'), 'Fra kamerarullen');
     await host.page.waitForFunction(() => window.__skaal.derived().photos.length === 2, null, { timeout: 8000 });
 
+    // Without a connection a photo says it is waiting, and goes out by itself afterwards.
+    const port = env.broker.port;
+    env.broker.dropClients();
+    await env.broker.close();
+    await anna.page.waitForSelector('.sync-dot.is-offline, .sync-dot.is-connecting', { timeout: 10000 });
+    await takePhoto(anna, 'Uden net');
+    await tab(anna, 'Feed');
+    await anna.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
+    await anna.page.waitForSelector('.photo-tile .photo-pending');
+    env.broker = await startBroker({ port });
+    await anna.page.waitForSelector('.photo-pending', { state: 'detached', timeout: 30000 });
+    await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Uden net' && ph.thumb), null, { timeout: 30000 });
+    const offline = await derived(bo, (d) => d.photos.find((ph) => ph.cap === 'Uden net').asset);
+    await bo.page.waitForFunction((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !!b), offline, { timeout: 15000 });
+
+    // The host can turn photos off (and on again) …
+    await tab(host, 'Mig');
+    await host.page.locator('.switch-row', { hasText: 'Fotos i eventet' }).click();
+    await bo.page.waitForFunction(() => !document.querySelector('[aria-label="Tag et billede"]'), null, { timeout: 8000 });
+    await tab(bo, 'Feed');
+    assert.match(await bo.page.locator('.photo-locked').textContent(), /Værten har slået fotos fra/);
+    assert.equal(await derived(bo, (d) => d.photos.length), 3, 'the photos already taken stay');
+    await host.page.locator('.switch-row', { hasText: 'Fotos i eventet' }).click();
+    await bo.page.waitForSelector('[aria-label="Tag et billede"]', { timeout: 8000 });
+    // … and delete every photo of the event, e.g. the morning after.
+    await host.page.getByRole('button', { name: /Slet alle billeder/ }).click();
+    await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Slet alle', exact: true }).click();
+    for (const ph of [...all, late, denied]) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 0, null, { timeout: 8000 });
+    await bo.page.waitForFunction((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !b), offline, { timeout: 8000 });
+
     // Old events with 8-character codes are too weakly protected for photos: no camera there.
     const old = await env.phone('old');
     await old.page.goto(env.appUrl('#/e/K7F2QXRM'));
@@ -790,7 +835,9 @@ const scenarios = {
     assert.equal(await old.page.getByRole('button', { name: 'Tag et billede', exact: true }).count(), 0);
     await tab(old, 'Feed');
     await old.page.waitForSelector('.photo-locked');
-    assertNoErrors([...all, tv, late, denied, old]);
+    // (Connection errors while the broker was down are expected.)
+    const ignore = (ph) => ({ ...ph, errors: ph.errors.filter((e) => !e.includes('WebSocket connection')) });
+    assertNoErrors([...all, tv, late, denied, old].map(ignore));
   },
 
   async 'resilience: offline logging, broker restart healing, continue on new phone, leave'(env) {

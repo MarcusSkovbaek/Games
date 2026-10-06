@@ -122,7 +122,7 @@ export function FeedTab({ room, d }) {
     />
     ${view === 'photos'
       ? photos.length
-        ? html`<${PhotoGrid} d=${d} photos=${photos} />`
+        ? html`<${PhotoGrid} room=${room} d=${d} photos=${photos} />`
         : html`<${Empty} icon="camera" title="Ingen billeder endnu" text="Tag det første billede fra aftenen — det dukker op her og i feedet hos alle." />`
       : items.length
         ? html`<div class="card" style=${{ padding: '2px 14px' }}>

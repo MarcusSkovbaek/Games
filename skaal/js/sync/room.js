@@ -266,6 +266,13 @@ export class Room extends Emitter {
     this._publishRaw(`${this.fbase}/${name}`, new Uint8Array(0));
   }
 
+  // True once a broker has the photo: it sent our thumbnail back and acknowledged the full size.
+  photoSent(name) {
+    const asset = this.state.assets[name];
+    const topic = `${this.fbase}/${name}`;
+    return this.brokers.some((b) => b.status === 'online' && b.client && (b.seen.get(`a/${name}`)?.v ?? -1) >= (asset?.v ?? 0) && !b.client.pending.has(`r:${topic}`));
+  }
+
   // The JPEG bytes of a full-size photo, asking one broker at a time (quickest first).
   async fetchFull(name) {
     const order = this.brokers.filter((b) => b.status === 'online' && b.client).sort((a, b) => (a.firstOnline || 0) - (b.firstOnline || 0));

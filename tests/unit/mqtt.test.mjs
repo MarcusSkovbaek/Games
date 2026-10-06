@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { encodeConnect, encodePublish, encodeSubscribe, encodeUnsubscribe, parsePackets, MqttClient } from '../../skaal/js/sync/mqtt.js';
@@ -6,6 +6,18 @@ import { startBroker } from '../support/broker.mjs';
 
 const require = createRequire(import.meta.url);
 const mqttPacket = require('mqtt-packet');
+
+// Clients are stopped after every test, also a failing one, so none keeps reconnecting.
+const clients = new Set();
+const client = (options) => {
+  const c = new MqttClient(options);
+  clients.add(c);
+  return c;
+};
+afterEach(() => {
+  for (const c of clients) c.stop();
+  clients.clear();
+});
 
 function parseWithReference(bytes) {
   const parser = mqttPacket.parser({ protocolVersion: 4 });
@@ -106,7 +118,7 @@ test('client talks to a real broker: retained, QoS1 acks, will, reconnect', asyn
   const broker = await startBroker();
   try {
     const got = [];
-    const a = new MqttClient({ url: broker.url, clientId: 'a', keepalive: 10 });
+    const a = client({ url: broker.url, clientId: 'a', keepalive: 10 });
     a.setWill({ topic: 'room/presence/a', payload: new TextEncoder().encode('off'), retain: true, qos: 0 });
     a.start();
     await until(() => a.online);
@@ -114,7 +126,7 @@ test('client talks to a real broker: retained, QoS1 acks, will, reconnect', asyn
     a.publish('room/state/a', new TextEncoder().encode('v2'), { retain: true, qos: 1 });
     await until(() => a.flushed);
 
-    const b = new MqttClient({
+    const b = client({
       url: broker.url,
       clientId: 'b',
       keepalive: 10,
@@ -156,14 +168,14 @@ test('fetching one retained message: big payloads, missing topics, no lasting su
   const broker = await startBroker();
   try {
     const big = new Uint8Array(260_000).map((_, i) => (i * 7) % 256);
-    const a = new MqttClient({ url: broker.url, clientId: 'fa', keepalive: 10 });
+    const a = client({ url: broker.url, clientId: 'fa', keepalive: 10 });
     a.start();
     await until(() => a.online);
     a.publish('room-f/photo1', big, { retain: true, qos: 1 });
     await until(() => a.flushed);
 
     const got = [];
-    const b = new MqttClient({ url: broker.url, clientId: 'fb', keepalive: 10, onMessage: (topic) => got.push(topic) });
+    const b = client({ url: broker.url, clientId: 'fb', keepalive: 10, onMessage: (topic) => got.push(topic) });
     assert.equal(await b.fetchRetained('room-f/photo1'), null, 'offline: nothing');
     b.start();
     await until(() => b.online);
@@ -185,6 +197,54 @@ test('fetching one retained message: big payloads, missing topics, no lasting su
     a.publish('room-f/photo1', new Uint8Array(0), { retain: true, qos: 1 });
     await until(() => a.flushed);
     assert.equal(await b.fetchRetained('room-f/photo1', { graceMs: 300 }), null);
+    a.stop();
+    b.stop();
+  } finally {
+    await broker.close();
+  }
+});
+
+test('oversized packets are skipped, not buffered — and the stream stays in step', () => {
+  const small = (t) => Uint8Array.from(mqttPacket.generate({ cmd: 'publish', topic: t, payload: Buffer.from('ok'), qos: 0 }));
+  const big = Uint8Array.from(mqttPacket.generate({ cmd: 'publish', topic: 'big', payload: Buffer.alloc(50_000, 1), qos: 0 }));
+  const all = new Uint8Array([...small('a'), ...big, ...small('b')]);
+  const whole = parsePackets(all, 10_000);
+  assert.deepEqual(whole.packets.map((p) => p.topic), ['a', 'b'], 'a complete oversized packet in the buffer is dropped');
+  assert.equal(whole.skip, 0);
+  // Only part of the big packet has arrived: everything after what we have must be skipped.
+  const part = parsePackets(all.subarray(0, small('a').length + 20_000), 10_000);
+  assert.deepEqual(part.packets.map((p) => p.topic), ['a']);
+  assert.equal(part.rest.length, 0);
+  assert.equal(part.skip, big.length - 20_000);
+});
+
+test('a stranger’s huge message on our topic is skipped without dropping the connection', async () => {
+  const broker = await startBroker();
+  try {
+    const a = client({ url: broker.url, clientId: 'xa', keepalive: 10 });
+    a.start();
+    await until(() => a.online);
+    a.publish('room/huge', new Uint8Array(600_000).fill(7), { retain: true, qos: 1 });
+    a.publish('room/fine', Uint8Array.of(1, 2, 3), { retain: true, qos: 1 });
+    await until(() => a.flushed);
+    const got = [];
+    const statuses = [];
+    const b = client({
+      url: broker.url,
+      clientId: 'xb',
+      keepalive: 10,
+      maxPacket: 100_000,
+      onMessage: (topic, payload) => got.push([topic, payload.length]),
+      onStatus: (st) => statuses.push(st),
+    });
+    b.subscribe('room/#');
+    b.start();
+    await until(() => got.some(([t]) => t === 'room/fine'));
+    a.publish('room/after', Uint8Array.of(9), { qos: 1 });
+    await until(() => got.some(([t]) => t === 'room/after'));
+    assert.deepEqual(got.map(([t]) => t).sort(), ['room/after', 'room/fine']);
+    assert.equal(b.skipped, 1);
+    assert.deepEqual(statuses.filter((st) => st !== 'connecting'), ['online'], 'never dropped');
     a.stop();
     b.stop();
   } finally {

@@ -7668,3 +7668,30 @@ button.pg-edit__emoji {
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
   font-size: 17px;
 }
+
+.photo-pending {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 12px);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.photo-tile .photo-pending {
+  top: auto;
+  right: 4px;
+  bottom: 28px;
+  left: 4px;
+  justify-content: center;
+}

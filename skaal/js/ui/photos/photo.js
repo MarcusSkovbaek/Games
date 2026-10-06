@@ -73,6 +73,12 @@ function useSeen(ref, delay = 350) {
 const ratio = (photo) => (photo.w && photo.h ? Math.min(1.8, Math.max(0.75, photo.w / photo.h)) : 1);
 
 // A photo in the feed: the thumbnail at once, sharpened to full size when it has been looked at.
+// Our own photo, while no broker has it yet (no connection): it goes out by itself later.
+function Pending({ room, photo, short }) {
+  if (photo.pid !== room.pid || !photo.full || room.photoSent(photo.asset)) return null;
+  return html`<span class="photo-pending"><${Icon} name="clock" size=${13} />${short ? 'Sendes …' : 'Sendes, når der er forbindelse'}</span>`;
+}
+
 export function FeedPhoto({ room, d, photo, compact }) {
   const ref = useRef(null);
   const seen = useSeen(ref);
@@ -81,10 +87,11 @@ export function FeedPhoto({ room, d, photo, compact }) {
   return html`<button type="button" ref=${ref} class=${cx('feed-photo', compact && 'feed-photo--compact')} style=${{ aspectRatio: compact ? '4 / 3' : String(ratio(photo)) }} onClick=${open} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
     <${PhotoFrame} src=${full.url || photo.thumb} class=${cx(!full.url && 'is-thumb')} />
     ${!photo.thumb ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
+    <${Pending} room=${room} photo=${photo} />
   </button>`;
 }
 
-export function PhotoGrid({ d, photos, badge }) {
+export function PhotoGrid({ room, d, photos, badge }) {
   return html`<div class="photo-grid">
     ${photos.map((ph) => {
       const p = d.players.get(ph.pid);
@@ -92,6 +99,7 @@ export function PhotoGrid({ d, photos, badge }) {
       return html`<button type="button" class="photo-tile" key=${ph.key} onClick=${() => eventUi.set({ photo: ph.key })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, ph)}`}>
         <${PhotoFrame} src=${ph.thumb} />
         ${!ph.thumb ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
+        <${Pending} room=${room} photo=${ph} short />
         ${badge?.(ph)}
         <span class="photo-tile__foot" aria-hidden="true">
           <${Avatar} player=${p} size=${22} />

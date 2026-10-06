@@ -105,8 +105,12 @@ tekst, hvis du vil, og tryk *Del med alle*.
   følge aftenen — og alle får en lille besked med en *Se*-knap. Under *Fotos* i feedet ligger alle
   aftenens billeder samlet, og storskærmen viser de nyeste som et lysbilledshow. Tryk på et billede
   for at se det i fuld størrelse; stryg til siden for det næste.
-- **Like, slet og skjul:** Alle kan give et ❤️. Man kan slette sine egne billeder (de forsvinder
-  fra alles telefoner og fra serverne), og værten — i pub golf også dommeren — kan skjule andres.
+- **Like, slet og skjul:** Alle kan give et ❤️. Man kan slette sine egne billeder, og værten — i
+  pub golf også dommeren — kan skjule andres. Begge dele fjerner billedet fra alles telefoner og fra
+  serverne. Under **Mig → Fotos** kan værten slå fotos fra og slette alle aftenens billeder på én
+  gang (fx dagen derpå).
+- **Uden net:** Et billede taget uden forbindelse står med *Sendes …*, indtil det er ude, og sendes
+  af sig selv, når forbindelsen kommer — også hvis appen lukkes imens.
 - **Kun for gæsterne:** Billederne krypteres på telefonen med eventets nøgle, før de sendes, og
   ligger kun krypteret på serverne. Kun telefoner med eventets kode kan se dem.
 - **Kan ikke downloades:** Appen har ingen download-knap, og billederne vises på en måde, hvor

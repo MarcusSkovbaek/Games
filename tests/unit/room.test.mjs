@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Room, cleanAsset } from '../../skaal/js/sync/room.js';
 import { deriveRoom, seal, unseal, sealBytes, unsealBytes, sha256Hex } from '../../skaal/js/core/crypto.js';
@@ -67,9 +67,19 @@ test('crypto: 12-character codes use one slow derivation; old 8-character codes 
   assert.equal(await unsealBytes(strong.key, box, 'm'), null, 'a JSON payload is not a photo');
 });
 
+// Every room a test opens is stopped afterwards — also when the test fails — so a failing test
+// can't leave clients reconnecting forever (which would keep the test run from ending).
+const opened = new Set();
+afterEach(async () => {
+  for (const room of opened) room.stop();
+  opened.clear();
+  await wait(200);
+});
+
 async function makeRoom(code, pid, brokers) {
   const { roomId, key, strong } = await deriveRoom(code);
   const room = new Room({ code, roomId, key, pid, brokers, persist: false, strong });
+  opened.add(room);
   await room.start();
   return room;
 }
@@ -216,6 +226,7 @@ test('photos: thumbnails reach everyone, the full size is fetched on demand, hea
     anna.publishFull(name, sealed);
     anna.setAsset(name, 'data:image/jpeg;base64,AAAA');
     await until(() => bo.state.assets[name]?.data, 6000, 'thumbnail reached Bo');
+    await until(() => anna.photoSent(name), 6000, 'Anna sees that a broker has her photo');
     assert.equal(Object.keys(bo.state.assets).length, 1, 'the full size is not pushed to everyone');
     const got = await bo.fetchFull(name);
     assert.equal(got.length, full.length);
@@ -226,6 +237,7 @@ test('photos: thumbnails reach everyone, the full size is fetched on demand, hea
     // it back on his own — a thumbnail without its full size would hide that the photo is gone.
     anna.stop();
     await wait(300);
+    assert.equal(anna.photoSent(name), false, 'no broker, nothing sent');
     await broker.close();
     broker = await startBroker({ port });
     await until(() => bo.status.online === 1, 15000, 'Bo reconnected');

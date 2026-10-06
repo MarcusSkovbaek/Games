@@ -5,6 +5,7 @@ import { fmtPoints, fmtDecimal, fmtClock, fmtAgo } from '../format.js';
 import { undo, setPaused, endEvent, reopenEvent, leaveEvent } from '../../app/actions.js';
 import { forgetEvent } from '../../app/session.js';
 import { forgetPhotos } from '../../app/photos.js';
+import { PhotoHostSection } from '../photos/host.js';
 import { prefs, confirmDialog, toast } from '../ui-store.js';
 import { navigate, tvLink } from '../router.js';
 import { formatCode } from '../../core/ids.js';
@@ -165,6 +166,8 @@ export function MeTab({ room, d }) {
         <${Switch} label="Pause" hint="Ude af minigames og straffe — dine drinks tæller stadig" checked=${me.paused} disabled=${!!d.ended} onChange=${togglePause} />
       </div>
     </section>
+
+    <${PhotoHostSection} room=${room} d=${d} />
 
     ${d.isHost
       ? html`<section class="section">

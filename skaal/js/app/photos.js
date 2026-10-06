@@ -105,15 +105,21 @@ export async function sharePhoto(room, prepared, caption = '') {
   return room.append({ t: 'photo', a: name, cap: String(caption || '').trim().slice(0, PHOTO.captionMax), w: prepared.w, h: prepared.h, f: 1 });
 }
 
-// Your own photo is deleted everywhere; anyone else's is hidden (host, or the pub golf judge).
+// Your own photo is deleted; anyone else's is hidden (host, or the pub golf judge). Either way it
+// leaves every phone and the brokers: the log entry says so for good, and the thumbnail and the
+// full size are wiped from the brokers right away (the phone that took it drops its own copy
+// when it sees that — see dropGoneCopies).
 export function removePhoto(room, photo) {
-  if (photo.pid === room.pid) {
-    room.append({ t: 'x', r: photo.id });
-    room.setAsset(photo.asset, null);
-    if (photo.full) room.clearFull(photo.asset);
-    drop(room, photo.asset);
-  } else {
-    room.append({ t: 'phide', k: photo.key });
+  removePhotos(room, [photo]);
+}
+
+// The host clears every photo of the event at once (e.g. the morning after).
+export function removePhotos(room, photos) {
+  room.appendMany(photos.map((ph) => (ph.pid === room.pid ? { t: 'x', r: ph.id } : { t: 'phide', k: ph.key })));
+  for (const ph of photos) {
+    room.setAsset(ph.asset, null);
+    if (ph.full) room.clearFull(ph.asset);
+    if (ph.pid === room.pid) drop(room, ph.asset);
   }
 }
 
@@ -122,8 +128,11 @@ export function removePhoto(room, photo) {
 // and `full:<name>` the sealed full-size photo — encrypted exactly as on the brokers.
 
 const listKey = (room) => `photos:${room.roomId}`;
+const kept = new Map(); // roomId -> names of the photos this phone keeps a copy of
 
 async function keep(room, name, asset, full) {
+  if (!kept.has(room.roomId)) kept.set(room.roomId, new Set());
+  kept.get(room.roomId).add(name);
   try {
     await putFile(`photo:${name}`, await seal(room.key, asset, `a/${name}`));
     await putFile(`full:${name}`, full);
@@ -136,6 +145,7 @@ async function keep(room, name, asset, full) {
 
 async function drop(room, name) {
   forget(name);
+  kept.get(room.roomId)?.delete(name);
   try {
     await deleteFile(`photo:${name}`);
     await deleteFile(`full:${name}`);
@@ -159,19 +169,31 @@ export async function restorePhotos(room) {
   };
   try {
     const list = (await getFile(listKey(room))) || [];
+    kept.set(room.roomId, new Set(list));
     for (const name of list) {
-      const kept = await getFile(`photo:${name}`);
-      if (!kept) continue;
+      const copy = await getFile(`photo:${name}`);
+      if (!copy) continue;
       // The first pub golf version kept the thumbnail unencrypted: seal it now.
-      const asset = kept instanceof Uint8Array || kept instanceof ArrayBuffer ? await unseal(room.key, new Uint8Array(kept), `a/${name}`) : kept;
+      const sealed = copy instanceof Uint8Array || copy instanceof ArrayBuffer;
+      const asset = sealed ? await unseal(room.key, new Uint8Array(copy), `a/${name}`) : copy;
       if (!asset) continue;
       room.restoreAsset(name, asset);
-      if (!(kept instanceof Uint8Array || kept instanceof ArrayBuffer)) await putFile(`photo:${name}`, await seal(room.key, asset, `a/${name}`));
+      if (!sealed) await putFile(`photo:${name}`, await seal(room.key, asset, `a/${name}`));
     }
   } catch {
     /* no IndexedDB */
   }
+  dropGoneCopies(room);
   room.healNow();
+}
+
+// Our own photos that someone hid (or that were deleted on another phone of ours) are wiped from
+// the brokers — so this phone lets go of its copies too, and never puts them back.
+export function dropGoneCopies(room) {
+  for (const name of kept.get(room.roomId) || []) {
+    const asset = room.state.assets[name];
+    if (asset && !asset.data) drop(room, name);
+  }
 }
 
 // Leaving or deleting an event removes this phone's copies of its photos.

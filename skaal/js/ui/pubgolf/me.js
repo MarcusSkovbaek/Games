@@ -3,6 +3,7 @@ import { html, useState, useStore, Avatar, Icon, IconButton, Sheet, Switch } fro
 import { setPaused, endEvent, reopenEvent, leaveEvent, appointJudge, shuffleTeams } from '../../app/actions.js';
 import { forgetEvent, session } from '../../app/session.js';
 import { forgetPhotos } from '../../app/photos.js';
+import { PhotoHostSection } from '../photos/host.js';
 import { prefs, confirmDialog, toast } from '../ui-store.js';
 import { navigate, tvLink } from '../router.js';
 import { formatCode } from '../../core/ids.js';
@@ -163,6 +164,8 @@ export function PgMeTab({ room, d }) {
         <${Switch} label="Pause" hint="Ude af minigames — dine slag tæller stadig" checked=${me.paused} disabled=${!!d.ended} onChange=${(on) => setPaused(room, on)} />
       </div>
     </section>
+
+    <${PhotoHostSection} room=${room} d=${d} />
 
     ${d.isHost
       ? html`<section class="section">

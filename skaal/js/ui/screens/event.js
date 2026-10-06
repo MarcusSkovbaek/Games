@@ -208,7 +208,7 @@ export function Topbar({ room, d, sync }) {
         </span>
       </button>
       <${SongButton} />
-      <${CameraButton} room=${room} />
+      <${CameraButton} room=${room} d=${d} />
       <${IconButton} icon="qr-code" label="Invitér" onClick=${() => eventUi.set({ invite: true })} />
       <${IconButton} icon=${sound ? 'volume-2' : 'volume-x'} label=${sound ? 'Slå lyd fra' : 'Slå lyd til'} onClick=${() => prefs.set({ sound: !sound })} />
     </div>
