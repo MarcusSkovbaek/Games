@@ -7,6 +7,7 @@ import * as storage from '../core/storage.js';
 import { randomId } from '../core/ids.js';
 import { now } from '../core/clock.js';
 import { derive } from '../game/derive.js';
+import { getFile, putFile, deleteFile } from '../core/files.js';
 import { clearPhotoCache } from './photos.js';
 import { bindAvatars, clearAvatars } from './avatars.js';
 
@@ -26,6 +27,7 @@ export function rememberEvent(code, patch) {
   if (i >= 0) list.splice(i, 1);
   list.unshift(next);
   storage.save('events', list.slice(0, 12));
+  for (const old of list.slice(12)) forgetKeys(old.code);
   return next;
 }
 
@@ -34,6 +36,28 @@ export function forgetEvent(code) {
     'events',
     recentEvents().filter((e) => e.code !== code),
   );
+  forgetKeys(code);
+}
+
+// An event's keys take a deliberately slow derivation (see core/crypto.js). The phone keeps what
+// it derived — the key as a CryptoKey, which can't be read out of the browser — so reopening an
+// event (every time the app starts) doesn't take the phone a second to think.
+const keysName = (code) => `keys:v2:${code}`;
+
+async function roomKeys(code) {
+  try {
+    const kept = await getFile(keysName(code));
+    if (typeof kept?.roomId === 'string' && kept.key?.type === 'secret' && typeof kept.strong === 'boolean') return kept;
+  } catch {
+    /* not kept (or no IndexedDB) */
+  }
+  const keys = await deriveRoom(code);
+  putFile(keysName(code), keys).catch(() => {});
+  return keys;
+}
+
+function forgetKeys(code) {
+  deleteFile(keysName(code)).catch(() => {});
 }
 
 export function pidFor(code) {
@@ -51,7 +75,7 @@ export async function openEvent(code) {
   closeEvent();
   const promise = (async () => {
     session.set({ code, status: 'connecting', room: null });
-    const { roomId, key, strong } = await deriveRoom(code);
+    const { roomId, key, strong } = await roomKeys(code);
     let pid = pidFor(code);
     if (!pid) pid = randomId(12);
     rememberEvent(code, { pid });
