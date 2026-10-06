@@ -110,3 +110,23 @@ test('photos are on by default; the host can turn them off', () => {
   assert.equal(normalizeSettings({ photos: false }).photos, false);
   assert.equal(normalizeSettings({ photos: 'nej' }).photos, true, 'junk keeps the default');
 });
+
+test('photos with their own thumbnail topic: no shared image needed; deleted or hidden ones are named as gone', () => {
+  const room = makeParty();
+  const lazy = (owner, cap) => {
+    const name = `${photoPrefix(owner)}${cap.toLowerCase().padEnd(6, 'x').slice(0, 6)}`;
+    return { name, entry: room.add(owner, { t: 'photo', a: name, cap, w: 400, h: 300, f: 1, th: 1 }) };
+  };
+  const a = lazy('anna0000', 'Anna');
+  const b = lazy('bo000000', 'Bo');
+  const c = lazy('cara0000', 'Cara');
+  let d = at(room);
+  assert.deepEqual(d.photos.map((ph) => [ph.cap, ph.lazy, ph.thumb]), [['Cara', true, null], ['Bo', true, null], ['Anna', true, null]]);
+  assert.deepEqual([...d.photosGone], []);
+  room.add('anna0000', { t: 'x', r: a.entry.id });
+  room.add('host0000', { t: 'phide', k: `bo000000:${b.entry.id}` });
+  d = at(room);
+  assert.deepEqual(d.photos.map((ph) => ph.cap), ['Cara']);
+  assert.deepEqual([...d.photosGone].sort(), [a.name, b.name].sort());
+  assert.equal(c.name, d.photos[0].asset);
+});

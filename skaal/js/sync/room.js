@@ -5,14 +5,15 @@
 //   <root>/<roomId>/p/<pid>/i    player profile (name, photo)      — last-writer-wins on `v`
 //   <root>/<roomId>/p/<pid>/l    player log: a grow-only set of entries, merged by id (CRDT)
 //   <root>/<roomId>/p/<pid>/o    presence heartbeat (+ last will when the connection drops)
-//   <root>/<roomId>/a/<name>     shared images (Tour faces and mask, photo thumbnails) — LWW on `v`
-//   <root>/<roomId>-f/<name>     full-size photos (raw encrypted JPEG) — outside the room's `#`
-//                                subscription, fetched one at a time when someone looks at them
+//   <root>/<roomId>/a/<name>     shared images (Tour faces and mask) — LWW on `v`
+//   <root>/<roomId>-t/<pid>/<name>  photo thumbnails  } raw encrypted JPEGs, outside the room's `#`
+//   <root>/<roomId>-f/<name>        full-size photos  } subscription: fetched one at a time when
+//                                                       someone looks at them (see Photos below)
 //
 // Every player only appends to their own log, so concurrent writes never conflict and every
 // device converges on the same state regardless of message order. Any device can "heal" a broker
-// that lost data (restart, purge) by republishing what it has cached locally; full-size photos are
-// healed by the phone that took them.
+// that lost data (restart, purge) by republishing what it has cached locally; photos are healed by
+// the phone that took them.
 
 import { SYNC } from '../config.js';
 import { Emitter } from '../core/emitter.js';
@@ -91,9 +92,12 @@ export class Room extends Emitter {
     // False for old 8-character codes: fine for scores, too weak to protect photos.
     this.strong = strong;
     this.base = `${SYNC.topicRoot}/${roomId}`;
+    this.tbase = `${SYNC.topicRoot}/${roomId}-t`;
     this.fbase = `${SYNC.topicRoot}/${roomId}-f`;
-    // Set by the photo store: (name) => sealed full-size photo this device took, or null.
-    this.fullSource = null;
+    // Photos this phone took and keeps a copy of, and (set by the photo store) where to get that
+    // copy: (name) => { thumb, full } as sealed bytes, or null.
+    this.ownPhotos = new Set();
+    this.photoSource = null;
     this.persist = persist;
     this.WebSocketImpl = WebSocketImpl;
     this.state = { meta: null, players: {}, assets: {} };
@@ -131,6 +135,8 @@ export class Room extends Emitter {
       });
       client.setWill({ topic: this._topic('o', this.pid), payload: will, retain: true, qos: 0 });
       client.subscribe(`${this.base}/#`, 0);
+      // Only our own photos' thumbnails: a broker that lost one of them gets it back from us.
+      client.subscribe(`${this.tbase}/${this.pid}/+`, 0);
       b.client = client;
       client.start();
     }
@@ -252,36 +258,80 @@ export class Room extends Emitter {
     return true;
   }
 
-  // ------------------------------------------------------------------------ full-size photos
+  // -------------------------------------------------------------------------------- photos
+  // A photo is two sealed JPEGs — a thumbnail and the full size — on topics outside the room's `#`
+  // subscription, fetched one at a time when someone looks at them. A phone that reconnects (which
+  // phones do all evening) therefore never downloads the evening's photos again. Only the phone
+  // that took a photo surely has it, so only that phone puts it back on a broker that lost it. It
+  // subscribes to its own thumbnails to notice: one missing from a broker means the broker lost it.
 
-  sealFull(name, bytes) {
-    return sealBytes(this.key, bytes, `f/${name}`);
+  async publishPhoto(name, thumbBytes, fullBytes) {
+    const thumb = await sealBytes(this.key, thumbBytes, `t/${name}`);
+    const full = await sealBytes(this.key, fullBytes, `f/${name}`);
+    this._publishRaw(`${this.tbase}/${this.pid}/${name}`, thumb);
+    this._publishRaw(`${this.fbase}/${name}`, full);
+    this.ownPhotos.add(name);
+    return { thumb, full };
   }
 
-  publishFull(name, payload) {
-    this._publishRaw(`${this.fbase}/${name}`, payload);
-  }
-
-  clearFull(name) {
+  // Wipes a photo (anyone's — deleted or hidden) from the brokers.
+  clearPhoto(pid, name) {
+    this._publishRaw(`${this.tbase}/${pid}/${name}`, new Uint8Array(0));
     this._publishRaw(`${this.fbase}/${name}`, new Uint8Array(0));
+    if (pid === this.pid) this.ownPhotos.delete(name);
   }
 
-  // True once a broker has the photo: it sent our thumbnail back and acknowledged the full size.
+  // The photos this phone keeps copies of (after a reload): heal them from now on.
+  setOwnPhotos(names) {
+    for (const name of names) this.ownPhotos.add(name);
+    this.healNow();
+  }
+
+  // True once a broker has our photo: it sent the thumbnail back and acknowledged the full size.
   photoSent(name) {
-    const asset = this.state.assets[name];
-    const topic = `${this.fbase}/${name}`;
-    return this.brokers.some((b) => b.status === 'online' && b.client && (b.seen.get(`a/${name}`)?.v ?? -1) >= (asset?.v ?? 0) && !b.client.pending.has(`r:${topic}`));
+    return this.brokers.some(
+      (b) => b.status === 'online' && b.client && b.seen.has(`t/${name}`) && !b.client.pending.has(`r:${this.fbase}/${name}`),
+    );
   }
 
-  // The JPEG bytes of a full-size photo, asking one broker at a time (quickest first).
+  // { bytes, sealed } of a thumbnail (sealed: as on the broker, for keeping on this phone).
+  fetchThumb(pid, name) {
+    return this._fetchSealed(`${this.tbase}/${pid}/${name}`, `t/${name}`);
+  }
+
   async fetchFull(name) {
+    return (await this._fetchSealed(`${this.fbase}/${name}`, `f/${name}`))?.bytes || null;
+  }
+
+  // What is on one topic, asking one broker at a time (quickest first).
+  async _fetchSealed(topic, context) {
     const order = this.brokers.filter((b) => b.status === 'online' && b.client).sort((a, b) => (a.firstOnline || 0) - (b.firstOnline || 0));
     for (const b of order) {
-      const payload = await b.client.fetchRetained(`${this.fbase}/${name}`);
-      const bytes = payload && (await unsealBytes(this.key, payload, `f/${name}`));
-      if (bytes) return bytes;
+      const sealed = await b.client.fetchRetained(topic);
+      const bytes = sealed && (await unsealBytes(this.key, sealed, context));
+      if (bytes) return { bytes, sealed };
     }
     return null;
+  }
+
+  async _healPhotos(b) {
+    for (const name of this.ownPhotos) {
+      if (b.status !== 'online') return;
+      if (b.seen.has(`t/${name}`)) continue;
+      const copy = await this.photoSource?.(name);
+      if (!copy?.thumb || b.status !== 'online') continue;
+      b.client?.publish(`${this.tbase}/${this.pid}/${name}`, copy.thumb, { qos: 1, retain: true });
+      if (copy.full) b.client?.publish(`${this.fbase}/${name}`, copy.full, { qos: 1, retain: true });
+    }
+  }
+
+  // Every photo in the logs, as [pid, name] (for deleting the event).
+  _photoTopics() {
+    const out = [];
+    for (const [pid, p] of Object.entries(this.state.players)) {
+      for (const e of p.entries.values()) if (e.t === 'photo' && typeof e.a === 'string' && ASSET_NAME.test(e.a)) out.push([pid, e.a]);
+    }
+    return out;
   }
 
   // Wipes the event from the brokers (host action). Other devices see `deleted` and clean up.
@@ -291,10 +341,8 @@ export class Room extends Emitter {
     for (const pid of Object.keys(this.state.players)) {
       for (const kind of ['i', 'l', 'o']) this._publishRaw(this._topic(kind, pid), new Uint8Array(0));
     }
-    for (const name of Object.keys(this.state.assets)) {
-      this._publishRaw(`${this.base}/a/${name}`, new Uint8Array(0));
-      if (name.startsWith('ph-')) this.clearFull(name);
-    }
+    for (const name of Object.keys(this.state.assets)) this._publishRaw(`${this.base}/a/${name}`, new Uint8Array(0));
+    for (const [pid, name] of this._photoTopics()) this.clearPhoto(pid, name);
     storage.remove(`room:${this.roomId}`);
   }
 
@@ -394,9 +442,8 @@ export class Room extends Emitter {
       const stale = () => !b.seen.get(rel) || newer(a, b.seen.get(rel));
       const mine = name.startsWith(`ph-${this.pid.slice(0, 16)}-`);
       if (name.startsWith('ph-') && this.strong) {
-        // A photo's thumbnail travels with its full-size version, which only the phone that took
-        // it has — so only that phone puts them back, together, on a broker that lost them. (If
-        // anyone else brought back the thumbnail alone, the missing photo would go unnoticed.)
+        // Photos from the first photo version kept their thumbnail here. It travels with the full
+        // size, which only the phone that took it has — so only that phone puts them back.
         if (mine) tasks.push({ rel, own: true, stale, data: () => this.state.assets[name], full: name });
         continue;
       }
@@ -421,7 +468,7 @@ export class Room extends Emitter {
         if (b.status !== 'online' || !task.stale()) return;
         if (task.full && task.data()?.data) {
           // No copy here (another phone of ours took it)? Then leave it to that phone.
-          const full = await this.fullSource?.(task.full);
+          const full = (await this.photoSource?.(task.full))?.full;
           if (!full || b.status !== 'online') return;
           b.client?.publish(`${this.fbase}/${task.full}`, full, { qos: 1, retain: true });
         }
@@ -430,6 +477,7 @@ export class Room extends Emitter {
       if (task.own) run();
       else this._later(400 + Math.random() * 2600, run);
     }
+    if (this.strong && !meta?.deleted) this._healPhotos(b);
   }
 
   _logStale(b, rel, p) {
@@ -440,6 +488,13 @@ export class Room extends Emitter {
   }
 
   async _onMessage(b, topic, payload) {
+    if (topic.startsWith(`${this.tbase}/${this.pid}/`)) {
+      // One of our own thumbnails (it counts only if it really is ours, encrypted with our key).
+      const name = topic.slice(this.tbase.length + this.pid.length + 2);
+      if (payload.length && (await unsealBytes(this.key, payload, `t/${name}`))) b.seen.set(`t/${name}`, true);
+      else b.seen.delete(`t/${name}`);
+      return;
+    }
     if (!topic.startsWith(`${this.base}/`)) return;
     const rel = topic.slice(this.base.length + 1);
     const parts = rel.split('/');

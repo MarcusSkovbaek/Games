@@ -5,7 +5,7 @@ import { setPodium } from '../../app/actions.js';
 import { toast } from '../ui-store.js';
 import { sfx } from '../feedback.js';
 import { eventUi } from '../screens/event.js';
-import { PhotoFrame, PhotoGrid } from '../photos/photo.js';
+import { PhotoThumb, PhotoGrid } from '../photos/photo.js';
 import { CameraCard } from '../photos/layer.js';
 import { MEDALS } from './common.js';
 
@@ -35,7 +35,7 @@ export function PhotosTab({ room, d }) {
             ${winners.map((ph, i) =>
               ph
                 ? html`<button type="button" class=${cx('pg-winner', `pg-winner--${i + 1}`)} onClick=${() => eventUi.set({ photo: ph.key })} aria-label=${`${i + 1}.-plads: billede fra ${d.players.get(ph.pid)?.name}`}>
-                    <${PhotoFrame} src=${ph.thumb} />
+                    <${PhotoThumb} room=${room} photo=${ph} />
                     <span class="pg-winner__medal" aria-hidden="true">${MEDALS[i]}</span>
                     <span class="pg-winner__who" aria-hidden="true">${d.players.get(ph.pid)?.name}</span>
                   </button>`

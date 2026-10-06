@@ -767,8 +767,12 @@ const scenarios = {
     await host.page.locator('.viewer__action', { hasText: 'Skjul' }).click();
     await host.page.locator('.viewer__confirm .btn--danger').click();
     await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 1, null, { timeout: 8000 });
-    await anna.page.waitForFunction((a) => window.__skaal.session.get().room.state.assets[a]?.data === null, bosPhoto, { timeout: 8000 });
-    assert.equal(await anna.page.evaluate((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => b?.length ?? null), bosPhoto), null, 'a hidden photo leaves the brokers too');
+    const boPid = await pidOf(bo);
+    await anna.page.waitForFunction(
+      ([pid, a]) => Promise.all([window.__skaal.session.get().room.fetchThumb(pid, a), window.__skaal.session.get().room.fetchFull(a)]).then(([t, f]) => !t && !f),
+      [boPid, bosPhoto],
+      { timeout: 8000 },
+    );
     await bo.page.waitForFunction(async (k) => {
       const db = await new Promise((resolve) => (indexedDB.open('skaal-files', 1).onsuccess = (e) => resolve(e.target.result)));
       return new Promise((resolve) => (db.transaction('files').objectStore('files').get(k).onsuccess = (e) => resolve(e.target.result === undefined)));
@@ -778,8 +782,12 @@ const scenarios = {
     await anna.page.locator('.viewer__confirm .btn--danger').click();
     await anna.page.waitForSelector('.viewer', { state: 'detached' });
     for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 0, null, { timeout: 8000 });
-    await bo.page.waitForFunction((a) => window.__skaal.session.get().room.state.assets[a]?.data === null, first.asset, { timeout: 8000 });
-    assert.equal(await bo.page.evaluate((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => b?.length ?? null), first.asset), null, 'the full size is gone from the broker');
+    const annaPid = await pidOf(anna);
+    await bo.page.waitForFunction(
+      ([pid, a]) => Promise.all([window.__skaal.session.get().room.fetchThumb(pid, a), window.__skaal.session.get().room.fetchFull(a)]).then(([t, f]) => !t && !f),
+      [annaPid, first.asset],
+      { timeout: 8000 },
+    );
 
     // A late joiner sees photos (thumbnails at once, the full size on demand).
     await takePhoto(anna, 'Sidste runde');
@@ -816,7 +824,7 @@ const scenarios = {
     await anna.page.waitForSelector('.photo-tile .photo-pending');
     env.broker = await startBroker({ port });
     await anna.page.waitForSelector('.photo-pending', { state: 'detached', timeout: 30000 });
-    await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Uden net' && ph.thumb), null, { timeout: 30000 });
+    await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Uden net'), null, { timeout: 30000 });
     const offline = await derived(bo, (d) => d.photos.find((ph) => ph.cap === 'Uden net').asset);
     await bo.page.waitForFunction((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !!b), offline, { timeout: 15000 });
 

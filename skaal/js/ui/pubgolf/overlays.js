@@ -8,7 +8,7 @@ import { clearToasts } from '../ui-store.js';
 import { eventUi } from '../screens/event.js';
 import { TeamBadge, MEDALS, entrantName, entrantColor } from './common.js';
 import { CrownWinner } from './challenge.js';
-import { PhotoFrame } from '../photos/photo.js';
+import { PhotoThumb } from '../photos/photo.js';
 
 const isLive = (ts, t) => t - ts < PG.momentMs && ts - t < 120_000;
 
@@ -101,10 +101,10 @@ export function PodiumOverlay({ room, d, tv = false }) {
   const items = [...d.pg.results.values()].filter((r) => r.places.some(Boolean) && (tv || r.by !== room.pid)).sort((a, b) => b.ts - a.ts);
   const { item, id, close } = useMoment({ room, d, tv, kind: 'pgPodium', items, waitFor: 'pgChal', group: (r) => r.comp });
   if (!item) return null;
-  return html`<${PodiumMoment} key=${id} d=${d} result=${item} tv=${tv} onClose=${close} />`;
+  return html`<${PodiumMoment} key=${id} room=${room} d=${d} result=${item} tv=${tv} onClose=${close} />`;
 }
 
-function PodiumMoment({ d, result, tv, onClose }) {
+function PodiumMoment({ room, d, result, tv, onClose }) {
   const pg = d.pg;
   const comp = pg.comps.find((c) => c.id === result.comp);
   useOverlayMount(tv, () => {
@@ -129,8 +129,8 @@ function PodiumMoment({ d, result, tv, onClose }) {
             const photo = place.photo ? d.photoByKey.get(place.photo) : null;
             const team = place.team ? pg.teamById.get(place.team) : null;
             return html`<div class=${cx('pg-stage__spot', `pg-stage__spot--${i + 1}`)} style=${{ '--tc': entrantColor(d, place) }}>
-              ${photo?.thumb
-                ? html`<${PhotoFrame} src=${photo.thumb} class="pg-stage__photo" />`
+              ${photo
+                ? html`<${PhotoThumb} room=${room} photo=${photo} class="pg-stage__photo" />`
                 : team
                   ? html`<${TeamBadge} team=${team} size=${i === 0 ? 72 : 56} />`
                   : html`<span class="pg-stage__emoji" aria-hidden="true">${MEDALS[i]}</span>`}

@@ -16,7 +16,7 @@ export function PhotoLayer({ room, d, extra }) {
     if (!allowed) eventUi.set({ camera: false });
   }, [allowed]);
   // Our own photos that were hidden or deleted elsewhere: let go of this phone's copies.
-  useEffect(() => dropGoneCopies(room), [room.version]);
+  useEffect(() => dropGoneCopies(room, d), [room.version]);
 
   const newest = d.photos.find((ph) => ph.pid !== room.pid) || null;
   // Only ever announce a photo newer than the last one announced (not an older one that becomes

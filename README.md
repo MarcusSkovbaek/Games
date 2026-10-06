@@ -119,9 +119,11 @@ tekst, hvis du vil, og tryk *Del med alle*.
   browseren ikke tilbyder "Gem billede", langt tryk eller træk. Billeder taget i appen havner ikke
   i telefonens kamerarulle, og GPS-position og andre metadata fjernes, før billedet deles. (Ingen
   app kan forhindre skærmbilleder — men ingen kan hente billedet ud af appen.)
-- **Hurtigt og sparsomt:** Hvert billede deles som en lille miniature, der kommer frem med det
-  samme, og en udgave i fuld størrelse, som først hentes, når nogen ser på den. Så downloader
-  telefonerne ikke alle aftenens billeder hver gang.
+- **Hurtigt og sparsomt:** Hvert billede ligger som en lille miniature og en udgave i fuld
+  størrelse, som telefonerne først henter, når billedet kommer frem på skærmen. Miniaturer, der er
+  hentet én gang, gemmes (krypteret) på telefonen. Så når en telefon vågner og forbinder igen —
+  hvad telefoner gør hele aftenen — skal den ikke hente aftenens billeder igen: Med 80 billeder
+  koster en genforbindelse omkring 1 MB i stedet for 8 MB.
 - **Gemt sikkert:** Billederne ligger på flere servere på én gang. Mister en server dem, lægger
   telefonen, der tog billedet, dem tilbage (den gemmer sin egen kopi — også krypteret).
   *Slet eventet* fjerner alle billeder fra serverne, og *Forlad eventet* fjerner telefonens egne

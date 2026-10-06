@@ -3,7 +3,7 @@
 // Thumbnails are on every phone already; the full-size photo is fetched (and decrypted) only when
 // someone looks at it.
 import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, Avatar, Button, Icon, IconButton, Spinner, cx } from '../kit.js';
-import { loadFull, cachedFull, removePhoto } from '../../app/photos.js';
+import { loadFull, cachedFull, loadThumb, cachedThumb, removePhoto } from '../../app/photos.js';
 import { toggleReaction } from '../../app/actions.js';
 import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
@@ -30,14 +30,16 @@ export function PhotoFrame({ src, label, fit = 'cover', class: className, style,
 
 export const photoLabel = (d, photo) => `Billede fra ${d.players.get(photo.pid)?.name || 'en gæst'}${photo.cap ? `: ${photo.cap}` : ''}`;
 
-// The full-size photo once it has been fetched (null until then); `enabled` = false waits.
-export function useFullPhoto(room, photo, enabled = true) {
-  const [state, setState] = useState(() => ({ key: photo?.key, url: photo ? cachedFull(photo) || (!photo.full ? photo.thumb : null) : null, failed: false }));
-  const current = state.key === photo?.key ? state : { key: photo?.key, url: photo ? cachedFull(photo) || (!photo.full ? photo.thumb : null) : null, failed: false };
+// A photo (thumbnail or full size) once it has been fetched — url is null until then, failed
+// says nobody has it right now; `enabled` = false waits.
+function useLoaded(room, photo, enabled, cached, load) {
+  const initial = () => ({ key: photo?.key, url: photo ? cached(photo) : null, failed: false });
+  const [state, setState] = useState(initial);
+  const current = state.key === photo?.key ? state : initial();
   useEffect(() => {
     if (!photo || !enabled || current.url) return undefined;
     let live = true;
-    loadFull(room, photo).then((url) => {
+    load(room, photo).then((url) => {
       if (live) setState({ key: photo.key, url, failed: !url });
     });
     return () => {
@@ -45,6 +47,26 @@ export function useFullPhoto(room, photo, enabled = true) {
     };
   }, [photo?.key, photo?.thumb, enabled]);
   return current;
+}
+
+export const useFullPhoto = (room, photo, enabled = true) => useLoaded(room, photo, enabled, cachedFull, loadFull);
+export const useThumb = (room, photo, enabled = true) => useLoaded(room, photo, enabled, cachedThumb, loadThumb);
+
+// True once the element is on screen or close to it (thumbnails load a little ahead).
+function useNear(ref, margin = '600px') {
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (near || !el) return undefined;
+    if (!globalThis.IntersectionObserver) {
+      setNear(true);
+      return undefined;
+    }
+    const io = new globalThis.IntersectionObserver(([entry]) => entry.isIntersecting && setNear(true), { rootMargin: margin });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  return near;
 }
 
 // Calls back once the element has been on screen for a moment (not while flicking past).
@@ -70,45 +92,57 @@ function useSeen(ref, delay = 350) {
   return seen;
 }
 
+// A photo's thumbnail in a frame (fetched when needed), with a spinner until it is there.
+export function PhotoThumb({ room, photo, class: className, style, label }) {
+  const thumb = useThumb(room, photo);
+  return html`<${PhotoFrame} src=${thumb.url} class=${className} style=${style} label=${label}>
+    ${!thumb.url && !thumb.failed ? html`<span class="photo-frame__wait"><${Spinner} size=${18} /></span>` : null}
+  <//>`;
+}
+
 const ratio = (photo) => (photo.w && photo.h ? Math.min(1.8, Math.max(0.75, photo.w / photo.h)) : 1);
 
 // A photo in the feed: the thumbnail at once, sharpened to full size when it has been looked at.
 // Our own photo, while no broker has it yet (no connection): it goes out by itself later.
 function Pending({ room, photo, short }) {
-  if (photo.pid !== room.pid || !photo.full || room.photoSent(photo.asset)) return null;
+  if (photo.pid !== room.pid || !photo.lazy || room.photoSent(photo.asset)) return null;
   return html`<span class="photo-pending"><${Icon} name="clock" size=${13} />${short ? 'Sendes …' : 'Sendes, når der er forbindelse'}</span>`;
 }
 
 export function FeedPhoto({ room, d, photo, compact }) {
   const ref = useRef(null);
+  const near = useNear(ref);
   const seen = useSeen(ref);
+  const thumb = useThumb(room, photo, near);
   const full = useFullPhoto(room, photo, seen && !compact);
   const open = () => eventUi.set({ photo: photo.key });
   return html`<button type="button" ref=${ref} class=${cx('feed-photo', compact && 'feed-photo--compact')} style=${{ aspectRatio: compact ? '4 / 3' : String(ratio(photo)) }} onClick=${open} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
-    <${PhotoFrame} src=${full.url || photo.thumb} class=${cx(!full.url && 'is-thumb')} />
-    ${!photo.thumb ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
+    <${PhotoFrame} src=${full.url || thumb.url} class=${cx(!full.url && 'is-thumb')} />
+    ${!thumb.url && !full.url ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} />
   </button>`;
 }
 
+function PhotoTile({ room, d, photo, badge }) {
+  const ref = useRef(null);
+  const thumb = useThumb(room, photo, useNear(ref));
+  const p = d.players.get(photo.pid);
+  const likes = likesOf(d, photo.key);
+  return html`<button type="button" ref=${ref} class="photo-tile" onClick=${() => eventUi.set({ photo: photo.key })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
+    <${PhotoFrame} src=${thumb.url} />
+    ${!thumb.url ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
+    <${Pending} room=${room} photo=${photo} short />
+    ${badge?.(photo)}
+    <span class="photo-tile__foot" aria-hidden="true">
+      <${Avatar} player=${p} size=${22} />
+      <span class="photo-tile__name">${p?.name}</span>
+      ${likes ? html`<span class="photo-tile__likes">${LIKE} ${likes}</span>` : null}
+    </span>
+  </button>`;
+}
+
 export function PhotoGrid({ room, d, photos, badge }) {
-  return html`<div class="photo-grid">
-    ${photos.map((ph) => {
-      const p = d.players.get(ph.pid);
-      const likes = likesOf(d, ph.key);
-      return html`<button type="button" class="photo-tile" key=${ph.key} onClick=${() => eventUi.set({ photo: ph.key })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, ph)}`}>
-        <${PhotoFrame} src=${ph.thumb} />
-        ${!ph.thumb ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
-        <${Pending} room=${room} photo=${ph} short />
-        ${badge?.(ph)}
-        <span class="photo-tile__foot" aria-hidden="true">
-          <${Avatar} player=${p} size=${22} />
-          <span class="photo-tile__name">${p?.name}</span>
-          ${likes ? html`<span class="photo-tile__likes">${LIKE} ${likes}</span>` : null}
-        </span>
-      </button>`;
-    })}
-  </div>`;
+  return html`<div class="photo-grid">${photos.map((ph) => html`<${PhotoTile} key=${ph.key} room=${room} d=${d} photo=${ph} badge=${badge} />`)}</div>`;
 }
 
 // Full screen, one photo at a time; swipe (or arrow keys) for the next. `extra(photo)` adds
@@ -160,6 +194,7 @@ export function PhotoViewer({ room, d, extra }) {
     }
   }, [index]);
 
+  const thumb = useThumb(room, photo, !!photo);
   const full = useFullPhoto(room, photo, !!photo);
   if (!photo) return null;
   const p = d.players.get(photo.pid);
@@ -187,8 +222,8 @@ export function PhotoViewer({ room, d, extra }) {
       </span>
       <${IconButton} icon="x" label="Luk" onClick=${close} data-autofocus />
     </header>
-    <${ZoomStage} photoKey=${photo.key} src=${full.url || photo.thumb} label=${photoLabel(d, photo)} onStep=${go} onClose=${close}>
-      ${!full.url && !full.failed && photo.full ? html`<span class="viewer__loading"><${Spinner} size=${30} /></span>` : null}
+    <${ZoomStage} photoKey=${photo.key} src=${full.url || thumb.url} label=${photoLabel(d, photo)} onStep=${go} onClose=${close}>
+      ${!full.url && !full.failed ? html`<span class="viewer__loading"><${Spinner} size=${30} /></span>` : null}
       ${full.failed ? html`<span class="viewer__note">Fuld størrelse er ikke tilgængelig lige nu — du ser en mindre udgave.</span>` : null}
       ${index > 0 ? html`<button type="button" class="viewer__nav viewer__nav--prev" aria-label="Forrige billede" onClick=${() => go(-1)}><${Icon} name="chevron-left" size=${26} /></button>` : null}
       ${index < photos.length - 1 ? html`<button type="button" class="viewer__nav viewer__nav--next" aria-label="Næste billede" onClick=${() => go(1)}><${Icon} name="chevron-right" size=${26} /></button>` : null}
@@ -359,6 +394,7 @@ function ZoomStage({ photoKey, src, label, onStep, onClose, children }) {
 // The final screen: the evening's most liked photo, and the way to all of them.
 export function PhotoOfTheNight({ room, d, onAll }) {
   const best = d.photos.reduce((a, b) => (!a || likesOf(d, b.key) > likesOf(d, a.key) ? b : a), null);
+  const thumb = useThumb(room, best, !!best);
   const full = useFullPhoto(room, best, !!best);
   if (!best) return null;
   const likes = likesOf(d, best.key);
@@ -366,7 +402,7 @@ export function PhotoOfTheNight({ room, d, onAll }) {
   return html`<section class="section">
     <h2 class="section__title">📸 ${likes ? 'Aftenens billede' : 'Aftenens seneste billede'}</h2>
     <button type="button" class="potn" style=${{ aspectRatio: String(ratio(best)) }} onClick=${() => eventUi.set({ photo: best.key })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, best)}`}>
-      <${PhotoFrame} src=${full.url || best.thumb} />
+      <${PhotoFrame} src=${full.url || thumb.url} />
       <span class="potn__foot" aria-hidden="true">
         <${Avatar} player=${p} size=${28} />
         <span class="potn__who"><strong>${p?.isMe ? 'Dig' : p?.name}</strong>${best.cap ? html` — ${best.cap}` : null}</span>

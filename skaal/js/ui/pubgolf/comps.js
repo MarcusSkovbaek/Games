@@ -1,7 +1,7 @@
 // The "Konkurrencer" tab: who won what (with podiums everyone can see), challenges along the way
 // and minigames for entertainment.
 import { html, useState, useEffect, Sheet, Button, Icon, cx } from '../kit.js';
-import { PhotoFrame } from '../photos/photo.js';
+import { PhotoThumb } from '../photos/photo.js';
 import { GAMES, gameById } from '../../minigames/index.js';
 import { setPodium, startGame } from '../../app/actions.js';
 import { getDerived } from '../../app/session.js';
@@ -33,7 +33,7 @@ export function CompetitionsTab({ room, d }) {
 
     <div class="stack">
       ${pg.comps.map(
-        (comp) => html`<${CompCard} key=${comp.id} d=${d} comp=${comp} result=${pg.results.get(comp.id)} canEdit=${pg.isJudge && !d.ended} onEdit=${() => setPodiumFor(comp.id)} />`,
+        (comp) => html`<${CompCard} room=${room} key=${comp.id} d=${d} comp=${comp} result=${pg.results.get(comp.id)} canEdit=${pg.isJudge && !d.ended} onEdit=${() => setPodiumFor(comp.id)} />`,
       )}
     </div>
     ${b1 || b2 || b3
@@ -50,7 +50,7 @@ export function CompetitionsTab({ room, d }) {
   </div>`;
 }
 
-export function CompCard({ d, comp, result, canEdit, onEdit }) {
+export function CompCard({ room, d, comp, result, canEdit, onEdit }) {
   const pg = d.pg;
   const places = result?.places || [];
   const decided = places.some(Boolean);
@@ -66,7 +66,7 @@ export function CompCard({ d, comp, result, canEdit, onEdit }) {
             pl
               ? html`<li class=${cx('pg-place', `pg-place--${i + 1}`)} style=${{ '--tc': entrantColor(d, pl) }}>
                   <span class="pg-place__medal" role="img" aria-label=${`${i + 1}.-plads`}>${MEDALS[i]}</span>
-                  ${pl.photo && d.photoByKey.get(pl.photo)?.thumb ? html`<${PhotoFrame} src=${d.photoByKey.get(pl.photo).thumb} class="pg-place__photo" />` : null}
+                  ${pl.photo && d.photoByKey.get(pl.photo) ? html`<${PhotoThumb} room=${room} photo=${d.photoByKey.get(pl.photo)} class="pg-place__photo" />` : null}
                   <span class="pg-place__name">${entrantName(d, pl)}${pl.photo && pl.team ? html`<small>${d.players.get(pl.pid)?.name}</small>` : null}</span>
                   ${pg.cfg.compBonus[i] && (pl.team || !pg.cfg.teams.length) ? html`<span class="pg-place__bonus">−${pg.cfg.compBonus[i]}</span>` : null}
                 </li>`
@@ -131,7 +131,7 @@ function PodiumSheet({ room, d, comp, onClose }) {
             ${entrants.map(({ id, photo: ph }) => {
               const at = placeOf(id);
               return html`<button type="button" class=${cx('pg-photo-pick__item', at >= 0 && 'is-on')} aria-pressed=${at >= 0} aria-label=${`Billede fra ${d.players.get(ph.pid)?.name}${at >= 0 ? `, ${at + 1}.-plads` : ''}`} onClick=${() => tapPhoto(id)}>
-                <${PhotoFrame} src=${ph.thumb} />
+                <${PhotoThumb} room=${room} photo=${ph} />
                 ${at >= 0 ? html`<span class="pg-photo-pick__medal">${MEDALS[at]}</span>` : null}
                 <span class="pg-photo-pick__who">${d.players.get(ph.pid)?.name}</span>
               </button>`;

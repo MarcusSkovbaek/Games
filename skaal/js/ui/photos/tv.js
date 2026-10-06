@@ -2,7 +2,7 @@
 // turn — full size, on a blurred copy of itself so portrait photos fill the frame nicely. Each
 // photo fades in over the last one and drifts slowly closer.
 import { html, useState, useEffect, useRef, Avatar } from '../kit.js';
-import { PhotoFrame, useFullPhoto, photoLabel } from './photo.js';
+import { PhotoFrame, useFullPhoto, useThumb, photoLabel } from './photo.js';
 
 function Layer({ src, label, top }) {
   return html`<div class=${top ? 'tv-photo__layer is-top' : 'tv-photo__layer'}>
@@ -15,8 +15,9 @@ export function TvPhotos({ room, d, empty = null }) {
   const recent = d.photos.slice(0, 12);
   const newest = recent[0];
   const photo = !recent.length ? null : d.t - newest.ts < 20_000 ? newest : recent[Math.floor(d.t / 8000) % recent.length];
+  const thumb = useThumb(room, photo, !!photo);
   const full = useFullPhoto(room, photo, !!photo);
-  const src = photo ? full.url || photo.thumb : null;
+  const src = photo ? full.url || thumb.url : null;
   // The photo shown before stays underneath while the new one fades in.
   const [under, setUnder] = useState(null);
   const shown = useRef(null);

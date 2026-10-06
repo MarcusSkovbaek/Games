@@ -209,55 +209,50 @@ test('shared images: the host\'s pictures reach everyone (also late joiners), ne
   }
 });
 
-test('photos: thumbnails reach everyone, the full size is fetched on demand, healed by its owner and cleared on delete', async () => {
+test('photos: fetched on demand (not with every reconnect), healed by the phone that took them, wiped on delete', async () => {
   let broker = await startBroker();
   const port = broker.port;
   const brokers = [{ id: 'local', url: broker.url }];
   const code = 'K7F2QXRM8HJP';
   const anna = await makeRoom(code, 'annapid01', brokers);
   const bo = await makeRoom(code, 'bopid0001', brokers);
-  const rooms = [anna, bo];
   try {
     await until(() => anna.status.online === 1 && bo.status.online === 1, 6000, 'online');
     const name = 'ph-annapid01-abc123';
+    const thumb = Uint8Array.from([0xff, 0xd8, 0xff, ...new Array(9000).fill(3)]);
     const full = new Uint8Array(220_000).map((_, i) => (i * 13) % 256);
-    const sealed = await anna.sealFull(name, full);
-    anna.fullSource = async (n) => (n === name ? sealed : null);
-    anna.publishFull(name, sealed);
-    anna.setAsset(name, 'data:image/jpeg;base64,AAAA');
-    await until(() => bo.state.assets[name]?.data, 6000, 'thumbnail reached Bo');
-    await until(() => anna.photoSent(name), 6000, 'Anna sees that a broker has her photo');
-    assert.equal(Object.keys(bo.state.assets).length, 1, 'the full size is not pushed to everyone');
+    const sealed = await anna.publishPhoto(name, thumb, full);
+    anna.photoSource = async (n) => (n === name ? sealed : null);
+    await until(() => anna.photoSent(name), 6000, 'a broker has Anna’s photo');
+    await wait(300);
+    assert.deepEqual(Object.keys(bo.state.assets), [], 'nothing is pushed to Bo with the room');
+    const t = await bo.fetchThumb('annapid01', name);
+    assert.deepEqual(t.bytes, thumb);
+    assert.ok(t.sealed.length > thumb.length, 'the thumbnail comes as it is kept: encrypted');
     const got = await bo.fetchFull(name);
     assert.equal(got.length, full.length);
     assert.equal(got[219_999], full[219_999]);
     assert.equal(await bo.fetchFull('ph-annapid01-nopeee'), null, 'no such photo');
 
-    // The broker loses everything while Anna is away. Bo has her thumbnail, but does not bring
-    // it back on his own — a thumbnail without its full size would hide that the photo is gone.
+    // The broker loses everything while Anna is away; Bo can't bring her photo back (he has no
+    // copy of the full size) — Anna's phone notices its thumbnail is gone and puts both back.
     anna.stop();
     await wait(300);
     assert.equal(anna.photoSent(name), false, 'no broker, nothing sent');
     await broker.close();
     broker = await startBroker({ port });
     await until(() => bo.status.online === 1, 15000, 'Bo reconnected');
-    await wait(SYNC.settleMs + 3500);
-    const late = await makeRoom(code, 'latepid01', brokers);
-    rooms.push(late);
-    await wait(SYNC.settleMs + 800);
-    assert.equal(late.state.assets[name], undefined, 'nobody but Anna heals her photo');
-    // Anna's phone comes back and puts the thumbnail and the full size back together.
+    await wait(SYNC.settleMs + 1000);
+    assert.equal(await bo.fetchThumb('annapid01', name), null, 'lost with the broker');
     await anna.start();
-    await until(() => late.state.assets[name]?.data, 8000, 'thumbnail healed');
-    assert.equal((await late.fetchFull(name))?.length, full.length, 'full size healed by its owner');
+    await until(async () => (await bo.fetchThumb('annapid01', name))?.bytes.length === thumb.length, 10000, 'thumbnail healed');
+    assert.equal((await bo.fetchFull(name))?.length, full.length, 'full size healed by its owner');
 
-    // Deleting empties the thumbnail and clears the full size from the broker.
-    anna.setAsset(name, null);
-    anna.clearFull(name);
-    await until(() => late.state.assets[name] && !late.state.assets[name].data, 6000, 'tombstone');
-    assert.equal(await late.fetchFull(name), null);
+    // Deleting wipes both; Anna no longer heals it.
+    anna.clearPhoto('annapid01', name);
+    await until(async () => !(await bo.fetchThumb('annapid01', name)) && !(await bo.fetchFull(name)), 6000, 'wiped');
+    assert.equal(anna.ownPhotos.has(name), false);
   } finally {
-    rooms.forEach((r) => r.stop());
     await wait(200);
     await broker.close();
   }

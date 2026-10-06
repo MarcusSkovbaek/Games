@@ -7776,3 +7776,10 @@ button.pg-edit__emoji {
   background: rgba(255, 79, 139, 0.35);
   font-weight: 800;
 }
+
+.photo-frame__wait {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}

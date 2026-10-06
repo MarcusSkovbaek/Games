@@ -411,7 +411,8 @@ export function derive(room, t) {
   // Photos from the evening. The host can hide anyone's — in pub golf so can the judge.
   const officials = meta?.type === 'pubgolf' ? officialsOf(meta) : null;
   const canHide = (pid, ts) => pid === meta?.hostId || !!officials?.officialAt(pid, ts);
-  const { photos, photoByKey } = derivePhotos({ list, assets, canHide });
+  const voidedPhotos = all.filter(({ pid, e }) => e.t === 'photo' && voided.has(`${pid}:${e.id}`));
+  const { photos, photoByKey, gone: photosGone } = derivePhotos({ list, assets, canHide, voided: voidedPhotos });
   for (const photo of photos) feed.push({ key: photo.key, ts: photo.ts, kind: 'photo', pid: photo.pid, photo });
 
   // Pub golf events: course, teams, scores and competitions.
@@ -464,6 +465,7 @@ export function derive(room, t) {
     toasts,
     photos,
     photoByKey,
+    photosGone,
     canHidePhotos: canHide(me, t),
     pg,
     leaderChanges,
