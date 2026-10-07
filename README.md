@@ -94,6 +94,8 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   værtens rettigheder (og værten kan derefter forlade eventet). Det, den tidligere vært gjorde som
   vært — skjulte billeder, startede minigames, afgjorde konkurrencer — gælder stadig.
 - **Ansvarlig** — vand tæller med, pause tager dig ud af minigames, og alle straffe er frivillige.
+  Efter fire drinks uden vand imellem kommer en stille påmindelse (højst hver 45. minut) med en
+  knap, der registrerer et glas vand.
 
 ## Kom i gang (GitHub Pages)
 

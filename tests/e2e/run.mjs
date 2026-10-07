@@ -85,6 +85,24 @@ const scenarios = {
     await sara.page.waitForSelector('.podium');
     await sara.page.waitForSelector('.chart');
     await shot(sara.page, 'e2e-board');
+
+    // Drink with care: four drinks with no water in between bring a gentle reminder (once). (Bo's
+    // shots also bring wheels — he spins them later.)
+    const drinkBo = async (label, n) => {
+      for (let i = 0; i < n; i++) {
+        const later = bo.page.locator('.overlay').getByRole('button', { name: 'Senere' });
+        if (await later.count()) await later.click();
+        await logDrink(bo, label, 1);
+      }
+    };
+    await drinkBo('Shot', 3);
+    const nudge = bo.page.locator('.toast', { hasText: '4 drinks siden sidste glas vand' });
+    await nudge.waitFor({ timeout: 5000 });
+    await nudge.getByRole('button', { name: 'Log vand' }).click();
+    await bo.page.waitForFunction(() => window.__skaal.derived().mePlayer.water === 1, null, { timeout: 5000 });
+    await drinkBo('Øl', 4);
+    await wait(1500);
+    assert.equal(await bo.page.locator('.toast', { hasText: 'glas vand — tag et?' }).count(), 0, 'not again so soon');
     assertNoErrors(all);
   },
 

@@ -8,6 +8,7 @@ import { fmtPoints, fmtDecimal, fmtDuration } from '../format.js';
 import { sfx, haptic, confetti } from '../feedback.js';
 import { toast } from '../ui-store.js';
 import { obligationTitle, obligationEmoji, whyText } from '../feedText.js';
+import * as storage from '../../core/storage.js';
 import { eventUi } from './event.js';
 import { FeedRow } from './feed.js';
 import { TourCard } from './tour.js';
@@ -149,6 +150,11 @@ function Boosts({ d }) {
 
 const lastTap = new Map();
 
+// Drink with care: after this many drinks with alcohol since the last glass of water, a gentle
+// reminder — at most every 45 minutes.
+const WATER_AFTER = 4;
+const WATER_EVERY_MS = 45 * 60_000;
+
 function spawnFloat(x, y, text) {
   const el = document.createElement('div');
   el.className = 'float-plus';
@@ -206,6 +212,21 @@ function DrinkGrid({ room, d, me }) {
         },
       },
     });
+    // A glass of water now and then (when water is on the list).
+    const sinceWater = me.drinkTimes.filter((ts) => ts > (me.lastWaterAt || 0)).length + (drink.alcoholic ? 1 : 0);
+    const nudged = storage.load(`waterNudge:${room.roomId}`, 0);
+    if (drink.alcoholic && sinceWater >= WATER_AFTER && Date.now() - nudged > WATER_EVERY_MS && drinks.some((x) => x.id === 'water')) {
+      storage.save(`waterNudge:${room.roomId}`, Date.now());
+      setTimeout(
+        () =>
+          toast(`💧 ${sinceWater} drinks siden sidste glas vand — tag et?`, {
+            key: 'water',
+            duration: 7000,
+            action: { label: 'Log vand', onClick: () => logDrink(room, 'water') && toast('💧 Vand registreret — skål!', { tone: 'good' }) },
+          }),
+        1200,
+      );
+    }
     // A Tour moment takes the stage; the spin waits on the drinks tab.
     if (offer && !moment) {
       setTimeout(() => {
