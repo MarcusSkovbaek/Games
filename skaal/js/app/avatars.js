@@ -6,7 +6,7 @@
 //
 // IndexedDB: `myav:<roomId>:<pv>` our own photo (for healing brokers that lost it),
 // `av:<roomId>:<pid>:<pv>` other people's, listed in `avs:<roomId>`.
-import { getFile, putFile, deleteFile } from '../core/files.js';
+import { getFile, putFile, deleteFile, updateFile } from '../core/files.js';
 import { unsealBytes, digestHex } from '../core/crypto.js';
 
 const TINY = 48; // px of the stand-in in the profile
@@ -148,10 +148,10 @@ export function loadAvatar(player) {
 }
 
 async function keep(room, pid, pv, sealed) {
+  if (room.gone) return;
   try {
+    await updateFile(`avs:${room.roomId}`, (list = []) => [...new Set([...list, `${pid}:${pv}`])]);
     await putFile(`av:${room.roomId}:${pid}:${pv}`, sealed);
-    const list = (await getFile(`avs:${room.roomId}`)) || [];
-    await putFile(`avs:${room.roomId}`, [...list, `${pid}:${pv}`]);
   } catch {
     /* no IndexedDB: fetched again next time */
   }

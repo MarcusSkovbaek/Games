@@ -4,8 +4,7 @@ import { drinkById } from '../../game/drinks.js';
 import { fmtPoints, fmtDecimal, fmtClock, fmtAgo } from '../format.js';
 import { undo, setPaused, endEvent, reopenEvent, leaveEvent } from '../../app/actions.js';
 import { forgetEvent } from '../../app/session.js';
-import { forgetPhotos } from '../../app/photos.js';
-import { saveProfile, avatarUrl, forgetAvatars } from '../../app/avatars.js';
+import { saveProfile, avatarUrl } from '../../app/avatars.js';
 import { PhotoHostSection } from '../photos/host.js';
 import { prefs, confirmDialog, toast } from '../ui-store.js';
 import { navigate, tvLink } from '../router.js';
@@ -69,9 +68,7 @@ export function MeTab({ room, d }) {
     });
     if (!ok) return;
     await room.destroy();
-    forgetEvent(room.code);
-    forgetPhotos(room.roomId);
-    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
+    forgetEvent(room);
     navigate('/');
   };
 
@@ -84,9 +81,7 @@ export function MeTab({ room, d }) {
     });
     if (!ok) return;
     leaveEvent(room);
-    forgetEvent(room.code);
-    forgetPhotos(room.roomId);
-    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
+    forgetEvent(room);
     navigate('/');
   };
 

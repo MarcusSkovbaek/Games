@@ -61,19 +61,19 @@ export function EventRoute({ code }) {
       }}
     />`;
   }
-  if (meta.deleted) return html`<${Deleted} code=${code} />`;
+  if (meta.deleted) return html`<${Deleted} room=${room} />`;
 
   const d = getDerived(room, now());
   const me = room.state.players[room.pid]?.profile;
-  if ((meta.removed || []).includes(room.pid)) return html`<${Removed} code=${code} />`;
+  if ((meta.removed || []).includes(room.pid)) return html`<${Removed} room=${room} />`;
   if (!me || !me.name || me.left) {
     return html`<${JoinProfile} room=${room} d=${d} />`;
   }
   return d.pg ? html`<${PgEventApp} room=${room} />` : html`<${EventApp} room=${room} />`;
 }
 
-function Removed({ code }) {
-  useEffect(() => forgetEvent(code), [code]);
+function Removed({ room }) {
+  useEffect(() => forgetEvent(room), [room]);
   return html`<main class="page"><div class="empty" style=${{ paddingTop: '80px' }}>
     <span class="empty__icon"><${Icon} name="door-open" size=${26} /></span>
     <div class="empty__title">Du er ikke længere med</div>
@@ -82,8 +82,8 @@ function Removed({ code }) {
   </div></main>`;
 }
 
-function Deleted({ code }) {
-  useEffect(() => forgetEvent(code), [code]);
+export function Deleted({ room }) {
+  useEffect(() => forgetEvent(room), [room]);
   return html`<main class="page"><div class="empty" style=${{ paddingTop: '80px' }}>
     <span class="empty__icon"><${Icon} name="trash" size=${26} /></span>
     <div class="empty__title">Eventet er slettet</div>

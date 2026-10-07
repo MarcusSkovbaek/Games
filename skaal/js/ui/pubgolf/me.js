@@ -2,8 +2,7 @@
 import { html, useState, useStore, Avatar, Icon, IconButton, Sheet, Switch } from '../kit.js';
 import { setPaused, endEvent, reopenEvent, leaveEvent, appointJudge, shuffleTeams } from '../../app/actions.js';
 import { forgetEvent, session } from '../../app/session.js';
-import { forgetPhotos } from '../../app/photos.js';
-import { saveProfile, avatarUrl, forgetAvatars } from '../../app/avatars.js';
+import { saveProfile, avatarUrl } from '../../app/avatars.js';
 import { PhotoHostSection } from '../photos/host.js';
 import { prefs, confirmDialog, toast } from '../ui-store.js';
 import { navigate, tvLink } from '../router.js';
@@ -51,18 +50,14 @@ export function PgMeTab({ room, d }) {
     });
     if (!ok) return;
     await room.destroy();
-    forgetEvent(room.code);
-    forgetPhotos(room.roomId);
-    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
+    forgetEvent(room);
     navigate('/');
   };
   const leave = async () => {
     const ok = await confirmDialog({ title: 'Forlad eventet?', text: 'Dine slag bliver stående på scorekortet.', confirm: 'Forlad', danger: true });
     if (!ok) return;
     leaveEvent(room);
-    forgetEvent(room.code);
-    forgetPhotos(room.roomId);
-    forgetAvatars(room.roomId, [room.me?.profile?.pv]);
+    forgetEvent(room);
     navigate('/');
   };
   const shuffle = async () => {

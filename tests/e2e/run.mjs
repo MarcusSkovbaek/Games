@@ -35,6 +35,79 @@ const idbHas = (ph, key) =>
     return new Promise((resolve) => (db.transaction('files').objectStore('files').get(k).onsuccess = (e) => resolve(e.target.result !== undefined)));
   }, key);
 
+// Waits for a check that itself has to wait for something (a broker, the phone's storage).
+// (page.waitForFunction can't: it takes the promise such a check returns for a yes.)
+async function eventually(ph, fn, arg, what, timeout = 8000) {
+  const end = Date.now() + timeout;
+  while (!(await ph.page.evaluate(fn, arg))) {
+    if (Date.now() > end) throw new Error(`${ph.name}: timed out waiting until ${what}`);
+    await ph.page.waitForTimeout(250);
+  }
+}
+
+// Waits until the phone's own storage has (or no longer has) `key`.
+const idbUntil = (ph, key, has = true) =>
+  eventually(ph, async ([k, want]) => {
+    const db = await new Promise((resolve) => (indexedDB.open('skaal-files', 1).onsuccess = (e) => resolve(e.target.result)));
+    const got = await new Promise((resolve) => (db.transaction('files').objectStore('files').get(k).onsuccess = (e) => resolve(e.target.result !== undefined)));
+    db.close();
+    return got === want;
+  }, [key, has], `${key} is ${has ? 'kept' : 'gone'}`);
+
+// Waits until no broker has a photo (neither size).
+const offBrokers = (ph, pid, name) =>
+  eventually(
+    ph,
+    ([p, a]) => Promise.all([window.__skaal.session.get().room.fetchThumb(p, a), window.__skaal.session.get().room.fetchFull(a)]).then(([t, f]) => !t && !f),
+    [pid, name],
+    `photo ${name} is off the brokers`,
+  );
+
+// Everything a phone keeps in its own storage — given a moment to go, if it is on its way out.
+async function filesLeft(ph) {
+  let keys = [];
+  for (let i = 0; i < 20; i++) {
+    keys = await ph.page.evaluate(async () => {
+      const db = await new Promise((resolve) => (indexedDB.open('skaal-files', 1).onsuccess = (e) => resolve(e.target.result)));
+      const all = await new Promise((resolve) => (db.transaction('files').objectStore('files').getAllKeys().onsuccess = (e) => resolve(e.target.result)));
+      db.close();
+      return all;
+    });
+    if (!keys.length) break;
+    await ph.page.waitForTimeout(250);
+  }
+  return keys;
+}
+
+// Files a phone keeps that no list of an event knows about: leaving the event (which removes
+// what its lists name) would leave them behind.
+async function assertAllListed(ph, what) {
+  let unlisted = [];
+  for (let i = 0; i < 20; i++) {
+    unlisted = await ph.page.evaluate(async () => {
+      const db = await new Promise((resolve) => (indexedDB.open('skaal-files', 1).onsuccess = (e) => resolve(e.target.result)));
+      const ask = (req) => new Promise((resolve) => (req.onsuccess = () => resolve(req.result)));
+      const store = () => db.transaction('files').objectStore('files');
+      const keys = await ask(store().getAllKeys());
+      const listed = new Set();
+      for (const key of keys) {
+        const [kind, roomId] = key.split(':');
+        const names = kind === 'thumbs' || kind === 'photos' || kind === 'avs' ? await ask(store().get(key)) : [];
+        for (const name of names) {
+          if (kind === 'thumbs') listed.add(`thumb:${name}`);
+          if (kind === 'photos') listed.add(`photo:${name}`).add(`full:${name}`);
+          if (kind === 'avs') listed.add(`av:${roomId}:${name}`);
+        }
+      }
+      db.close();
+      return keys.filter((key) => /^(thumb|photo|full|av):/.test(key) && !listed.has(key));
+    });
+    if (!unlisted.length) return;
+    await ph.page.waitForTimeout(250); // (perhaps still being written)
+  }
+  assert.deepEqual(unlisted, [], `${what}: every file kept on the phone is listed for its event`);
+}
+
 async function party(env) {
   const { ph: host, code } = await createEvent(env, { photo: await photoOf(env.browser, '😎', '#ff9a8b,#ff6a88') });
   const anna = await joinEvent(env, code, 'Anna', await photoOf(env.browser, '🦊', '#a1c4fd,#c2e9fb'));
@@ -87,12 +160,18 @@ const scenarios = {
     await shot(sara.page, 'e2e-board');
 
     // Drink with care: four drinks with no water in between bring a gentle reminder (once). (Bo's
-    // shots also bring wheels — he spins them later.)
+    // shots also bring wheels, whenever they come up — he spins them later.)
     const drinkBo = async (label, n) => {
       for (let i = 0; i < n; i++) {
-        const later = bo.page.locator('.overlay').getByRole('button', { name: 'Senere' });
-        if (await later.count()) await later.click();
-        await logDrink(bo, label, 1);
+        const before = await derived(bo, (d) => d.mePlayer.alcoholic);
+        for (let tries = 0; tries < 8; tries++) {
+          const later = bo.page.locator('.overlay').getByRole('button', { name: 'Senere' });
+          if (await later.count()) await later.first().click();
+          const tile = bo.page.locator('.drink-tile', { hasText: label }).first();
+          if (await tile.click({ timeout: 2000 }).then(() => true, () => false)) break;
+        }
+        await bo.page.waitForFunction((b) => window.__skaal.derived().mePlayer.alcoholic > b, before, { timeout: 5000 });
+        await bo.page.waitForTimeout(500); // (a second tap right after is taken for a double tap)
       }
     };
     await drinkBo('Shot', 3);
@@ -950,26 +1029,40 @@ const scenarios = {
     await host.page.locator('.viewer__confirm .btn--danger').click();
     await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 1, null, { timeout: 8000 });
     const boPid = await pidOf(bo);
-    await anna.page.waitForFunction(
-      ([pid, a]) => Promise.all([window.__skaal.session.get().room.fetchThumb(pid, a), window.__skaal.session.get().room.fetchFull(a)]).then(([t, f]) => !t && !f),
-      [boPid, bosPhoto],
-      { timeout: 8000 },
-    );
-    await bo.page.waitForFunction(async (k) => {
-      const db = await new Promise((resolve) => (indexedDB.open('skaal-files', 1).onsuccess = (e) => resolve(e.target.result)));
-      return new Promise((resolve) => (db.transaction('files').objectStore('files').get(k).onsuccess = (e) => resolve(e.target.result === undefined)));
-    }, `full:${bosPhoto}`, { timeout: 8000 });
+    await offBrokers(anna, boPid, bosPhoto);
+    await idbUntil(bo, `full:${bosPhoto}`, false);
     await anna.page.locator('.photo-tile').click();
     await anna.page.locator('.viewer__action', { hasText: 'Slet' }).click();
     await anna.page.locator('.viewer__confirm .btn--danger').click();
     await anna.page.waitForSelector('.viewer', { state: 'detached' });
     for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 0, null, { timeout: 8000 });
     const annaPid = await pidOf(anna);
-    await bo.page.waitForFunction(
-      ([pid, a]) => Promise.all([window.__skaal.session.get().room.fetchThumb(pid, a), window.__skaal.session.get().room.fetchFull(a)]).then(([t, f]) => !t && !f),
-      [annaPid, first.asset],
-      { timeout: 8000 },
-    );
+    await offBrokers(bo, annaPid, first.asset);
+
+    // The browser closes the phone's storage under the app (iOS does, after a while in the
+    // background): the copy of the next photo is still kept, and removed with it, on a
+    // connection opened anew.
+    await bo.page.evaluate(() => {
+      const proto = window.IDBDatabase.prototype;
+      const transaction = proto.transaction;
+      let first = true;
+      proto.transaction = function (...args) {
+        if (first) {
+          first = false;
+          this.close();
+        }
+        return transaction.apply(this, args);
+      };
+    });
+    await pickPhoto(bo, await photoOf(env.browser, '🔌', '#fdfbfb,#ebedee'), 'Efter lukningen');
+    const reopened = await derived(bo, (d) => d.photos[0]);
+    await idbUntil(bo, `full:${reopened.asset}`);
+    await bo.page.evaluate((key) => window.__skaal.ui.set({ photo: key }), reopened.key);
+    await bo.page.locator('.viewer__action', { hasText: 'Slet' }).click();
+    await bo.page.locator('.viewer__confirm .btn--danger').click();
+    await bo.page.waitForSelector('.viewer', { state: 'detached' });
+    for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 0, null, { timeout: 8000 });
+    await idbUntil(bo, `full:${reopened.asset}`, false);
 
     // A late joiner sees photos (thumbnails at once, the full size on demand).
     await takePhoto(anna, 'Sidste runde');
@@ -1008,7 +1101,7 @@ const scenarios = {
     await anna.page.waitForSelector('.photo-pending', { state: 'detached', timeout: 30000 });
     await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Uden net'), null, { timeout: 30000 });
     const offline = await derived(bo, (d) => d.photos.find((ph) => ph.cap === 'Uden net').asset);
-    await bo.page.waitForFunction((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !!b), offline, { timeout: 15000 });
+    await eventually(bo, (a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !!b), offline, 'the photo taken offline is on a broker', 15000);
 
     // When the host ends the event, the most liked photo is the photo of the night.
     await tab(bo, 'Feed');
@@ -1065,7 +1158,7 @@ const scenarios = {
     await host.page.getByRole('button', { name: /Slet alle billeder/ }).click();
     await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Slet alle', exact: true }).click();
     for (const ph of [...all, late, denied]) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 0, null, { timeout: 8000 });
-    await bo.page.waitForFunction((a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !b), offline, { timeout: 8000 });
+    await eventually(bo, (a) => window.__skaal.session.get().room.fetchFull(a).then((b) => !b), offline, 'the purged photo is off the brokers');
 
     // Several photos from the camera roll at once: reviewed together, one taken out again, shared
     // one by one — the caption goes with the first.
@@ -1093,6 +1186,25 @@ const scenarios = {
     assert.equal(await host.page.locator('.feed-set .feed-photo').count(), 2);
     assert.deepEqual(await axeViolations(host.page, axeSource), [], 'a set of photos in the feed is accessible');
     await shot(host.page, 'e2e-feed-set');
+
+    // The host deletes the event: gone from the brokers, the phones and the big screen — the
+    // copies of photos and profile photos the phones kept too — and off everyone's list of events.
+    const left = await derived(bo, (d) => d.photos.map((ph) => [ph.pid, ph.asset]));
+    await tab(host, 'Mig');
+    await host.page.getByRole('button', { name: /Slet eventet/ }).click();
+    await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Slet alt', exact: true }).click();
+    await host.page.waitForSelector('.landing__logo', { timeout: 10000 });
+    for (const ph of [anna, bo, late, denied, tv]) await ph.page.waitForSelector('.empty__title:has-text("Eventet er slettet")', { timeout: 10000 });
+    for (const [pid, name] of left) {
+      const there = await bo.page.evaluate(([p, n]) => window.__skaal.session.get().room.fetchThumb(p, n), [pid, name]);
+      assert.equal(there, null, 'the photos are gone from the brokers');
+    }
+    await wait(1500); // (the host's phone has closed the event: the others hear of it)
+    for (const ph of [host, anna, bo, late, denied, tv]) {
+      assert.deepEqual(await filesLeft(ph), [], `nothing of the event is left on ${ph.name}’s phone`);
+      const events = await ph.page.evaluate(() => JSON.parse(localStorage.getItem('skaal:events') || '[]').map((e) => e.code));
+      assert.ok(!events.includes(code), `the event is off ${ph.name}’s list of events`);
+    }
 
     // Old events with 8-character codes are too weakly protected for photos: no camera there.
     const old = await env.phone('old');
@@ -1227,6 +1339,11 @@ const scenarios = {
     await anna.page.getByRole('button', { name: 'Luk', exact: true }).click();
     await anna.page.locator('.photo-filter .chip', { hasText: 'Alle · 24' }).click();
     await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 24, null, { timeout: 5000 });
+    // The thumbnails her phone fetched (several at a time) and the copies of Bo's 23 shots on his
+    // are all on the lists that leaving the event clears.
+    await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile .photo-frame[style*="blob:"]').length >= 8, null, { timeout: 10000 });
+    await assertAllListed(anna, 'Anna');
+    await assertAllListed(bo, 'Bo');
 
     // The host turns the disposable camera off: photos are shared at once again.
     await tab(host, 'Mig');
@@ -1253,6 +1370,7 @@ const scenarios = {
     await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Fotoautomaten 📸'), null, { timeout: 8000 });
     const sheet = await derived(bo, (d) => d.photos.find((ph) => ph.cap === 'Fotoautomaten 📸'));
     assert.ok(sheet.w > 1000 && sheet.w === sheet.h, `one square sheet (${sheet.w}×${sheet.h})`);
+
 
     // Pub golf: the players shoot the photo competition blind, and the judge decides it once the
     // photos have developed — after the round has ended.
@@ -1359,6 +1477,24 @@ const scenarios = {
     await back.waitForSelector('.drink-grid', { timeout: 15000 });
     await ny.page.waitForFunction(() => /blob:/.test(document.querySelector('.photo-tile .photo-frame')?.style.backgroundImage || ''), null, { timeout: 45000 });
     assert.equal(await ny.page.locator('.photo-frame__gone').count(), 0);
+
+    // The host removes Ny (a mistake, say): Ny's photo leaves with them — off the brokers too — and
+    // nothing of the event is left on Ny's phone.
+    await takePhoto(ny, 'Fra Ny');
+    await anna.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Fra Ny'), null, { timeout: 8000 });
+    const nys = await derived(anna, (d) => d.photos.find((ph) => ph.cap === 'Fra Ny'));
+    await ny.page.waitForFunction((a) => window.__skaal.session.get().room.photoSent(a), nys.asset, { timeout: 8000 });
+    const onBrokers = () => anna.page.evaluate(([pid, a]) => window.__skaal.session.get().room.fetchThumb(pid, a).then((t) => !!t), [nys.pid, nys.asset]);
+    assert.equal(await onBrokers(), true);
+    await tab({ page: back }, 'Stilling');
+    await back.locator('.board-row', { hasText: 'Ny' }).click();
+    await back.getByRole('button', { name: 'Fjern fra event' }).click();
+    await back.getByRole('button', { name: 'Fjern', exact: true }).click();
+    await ny.page.waitForSelector('.empty__title:has-text("Du er ikke længere med")', { timeout: 8000 });
+    await anna.page.waitForFunction((a) => !window.__skaal.derived().photos.some((ph) => ph.asset === a), nys.asset, { timeout: 8000 });
+    await offBrokers(anna, nys.pid, nys.asset);
+    assert.deepEqual(await filesLeft(ny), [], 'nothing of the event is left on the phone of a removed player');
+
     const ignore = (ph) => ({ ...ph, errors: ph.errors.filter((e) => !e.includes('WebSocket connection')) });
     assertNoErrors([host, anna, late, second, ny].map(ignore));
   },

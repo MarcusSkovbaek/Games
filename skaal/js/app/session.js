@@ -8,8 +8,8 @@ import { randomId } from '../core/ids.js';
 import { now } from '../core/clock.js';
 import { derive } from '../game/derive.js';
 import { getFile, putFile, deleteFile } from '../core/files.js';
-import { clearPhotoCache } from './photos.js';
-import { bindAvatars, clearAvatars } from './avatars.js';
+import { clearPhotoCache, forgetPhotos } from './photos.js';
+import { bindAvatars, clearAvatars, forgetAvatars } from './avatars.js';
 
 export const session = createStore({ code: null, room: null, status: 'idle', version: 0, sync: null });
 
@@ -31,12 +31,16 @@ export function rememberEvent(code, patch) {
   return next;
 }
 
-export function forgetEvent(code) {
+// Leaving an event — or finding it deleted, or yourself removed from it — takes it off this
+// device: off the list of events, its keys, and the copies of its photos and profile photos.
+export function forgetEvent(room) {
   storage.save(
     'events',
-    recentEvents().filter((e) => e.code !== code),
+    recentEvents().filter((e) => e.code !== room.code),
   );
-  forgetKeys(code);
+  forgetKeys(room.code);
+  forgetPhotos(room.roomId);
+  forgetAvatars(room.roomId, [room.me?.profile?.pv]);
 }
 
 // An event's keys take a deliberately slow derivation (see core/crypto.js). The phone keeps what
@@ -84,7 +88,7 @@ export async function openEvent(code) {
       room.on('change', (version) => {
         session.set({ version });
         const name = room.state.meta?.name;
-        if (name && recentEvents()[0]?.name !== name) rememberEvent(code, { name, host: room.isHost() });
+        if (name && !room.gone && recentEvents()[0]?.name !== name) rememberEvent(code, { name, host: room.isHost() });
       }),
       room.on('status', (sync) => session.set({ sync })),
     ];

@@ -199,6 +199,12 @@ export class Room extends Emitter {
 
   // ------------------------------------------------------------------------------- public API
 
+  // Deleted, or this phone's player removed from it: the event is no longer this phone's.
+  get gone() {
+    const meta = this.state.meta;
+    return !!meta?.deleted || !!meta?.removed?.includes(this.pid);
+  }
+
   get me() {
     return this.state.players[this.pid] || null;
   }
@@ -301,6 +307,11 @@ export class Room extends Emitter {
     this._publishRaw(`${this.fbase}/${name}`, new Uint8Array(0));
     this._publishRaw(`${this.rbase}/${pid}/${name}`, new Uint8Array(0));
     if (pid === this.pid) this.ownPhotos.delete(name);
+  }
+
+  // Wipes every photo a player took from the brokers (a player the host removed).
+  clearPhotosOf(pid) {
+    for (const [p, name] of this._photoTopics()) if (p === pid) this.clearPhoto(p, name);
   }
 
   _receipt(name) {
@@ -541,7 +552,8 @@ export class Room extends Emitter {
       if (task.own) run();
       else this._later(400 + Math.random() * 2600, run);
     }
-    if (this.strong && !meta?.deleted) this._healPhotos(b);
+    // (Nor are the photos of a player who was removed put back.)
+    if (this.strong && !this.gone) this._healPhotos(b);
   }
 
   _logStale(b, rel, p) {

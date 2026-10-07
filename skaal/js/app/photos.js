@@ -10,7 +10,7 @@
 // put the photo back on a broker that lost it. Other phones keep thumbnails they have fetched (still
 // encrypted) so they don't fetch them again, and decrypted photos in memory only.
 import { randomId } from '../core/ids.js';
-import { getFile, putFile, deleteFile } from '../core/files.js';
+import { getFile, putFile, deleteFile, updateFile } from '../core/files.js';
 import { seal, unseal, unsealBytes } from '../core/crypto.js';
 import { photoPrefix, COMMENT_MAX } from '../game/photos.js';
 
@@ -192,10 +192,10 @@ async function keep(room, name, sealed) {
   if (!kept.has(room.roomId)) kept.set(room.roomId, new Set());
   kept.get(room.roomId).add(name);
   try {
+    // On the list first: whatever is on the phone, leaving the event finds it.
+    await updateFile(listKey(room), (list = []) => [...new Set([...list, name])]);
     await putFile(`photo:${name}`, sealed.thumb);
     await putFile(`full:${name}`, sealed.full);
-    const list = (await getFile(listKey(room))) || [];
-    await putFile(listKey(room), [...new Set([...list, name])]);
   } catch {
     /* no IndexedDB: the brokers still have it */
   }
@@ -207,8 +207,7 @@ async function drop(room, name) {
   try {
     await deleteFile(`photo:${name}`);
     await deleteFile(`full:${name}`);
-    const list = (await getFile(listKey(room))) || [];
-    await putFile(listKey(room), list.filter((x) => x !== name));
+    await updateFile(listKey(room), (list = []) => list.filter((x) => x !== name));
   } catch {
     /* nothing kept */
   }
@@ -373,10 +372,10 @@ export function loadThumb(room, photo) {
 }
 
 async function keepThumb(room, name, sealed) {
+  if (room.gone) return;
   try {
+    await updateFile(`thumbs:${room.roomId}`, (list = []) => (list.includes(name) ? list : [...list, name]));
     await putFile(`thumb:${name}`, sealed);
-    const list = (await getFile(`thumbs:${room.roomId}`)) || [];
-    if (!list.includes(name)) await putFile(`thumbs:${room.roomId}`, [...list, name]);
   } catch {
     /* no IndexedDB: fetch it again next time */
   }

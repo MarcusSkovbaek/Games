@@ -31,7 +31,7 @@ function PlayerDetail({ room, d, p, onClose }) {
   const remove = async () => {
     const ok = await confirmDialog({
       title: `Fjern ${p.name}?`,
-      text: 'Spilleren og alle deres drinks forsvinder fra stillingen. Brug det til dubletter og fejl.',
+      text: 'Spilleren forsvinder fra eventet med alle sine drinks og billeder. Brug det til dubletter og fejl.',
       confirm: 'Fjern',
       danger: true,
     });

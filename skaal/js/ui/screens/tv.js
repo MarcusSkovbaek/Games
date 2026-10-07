@@ -1,6 +1,7 @@
 // Big-screen mode (#/tv/<code>): a read-only live view for a TV or laptop at the party.
 import { html, useState, useEffect, useStore, useNow, useWakeLock, Avatar, Icon, Ring, Spinner } from '../kit.js';
 import { session, openEvent, closeEvent, getDerived } from '../../app/session.js';
+import { Deleted } from './event.js';
 import { isValidCode, formatCode } from '../../core/ids.js';
 import { now } from '../../core/clock.js';
 import { gameById } from '../../minigames/index.js';
@@ -59,6 +60,8 @@ export function TvRoute({ code }) {
   if (!room || !room.state.meta) {
     return html`<main class="page"><div class="empty" style=${{ paddingTop: '120px' }}><${Spinner} size=${34} /><div class="empty__title">Forbinder til ${formatCode(code)}…</div></div></main>`;
   }
+  // Deleted by the host: off the big screen too, photos and all.
+  if (room.state.meta.deleted) return html`<${Deleted} room=${room} />`;
   const d = getDerived(room, now());
   if (d.pg) return html`<${PgTv} room=${room} d=${d} code=${code} />`;
   const rows = d.ranking.filter((p) => !p.left).slice(0, 10);

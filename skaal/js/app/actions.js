@@ -122,6 +122,8 @@ export function removePlayer(room, pid) {
   const removed = new Set(room.state.meta.removed || []);
   removed.add(pid);
   room.setMeta({ removed: [...removed] });
+  // Their photos leave with them — nobody sees them any more — so off the brokers too.
+  room.clearPhotosOf(pid);
 }
 
 export function leaveEvent(room) {
