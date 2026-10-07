@@ -1150,6 +1150,21 @@ const scenarios = {
     for (const ph of all) await ph.page.waitForSelector('.overlay[aria-label="Happy Hour"]', { state: 'detached', timeout: 8000 });
     await tv.page.waitForSelector('.tv-photo', { timeout: 8000 });
 
+    // In the gallery: one person's photos (Bo's whole roll) — and the viewer goes through just those.
+    await anna.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
+    await anna.page.locator('.photo-filter .chip', { hasText: 'Bo · 23' }).click();
+    await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 23, null, { timeout: 5000 });
+    assert.equal(await anna.page.getByRole('button', { name: 'Afspil Bos billeder' }).count(), 1);
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the gallery with its filter is accessible');
+    await shot(anna.page, 'e2e-photo-filter');
+    await anna.page.locator('.photo-tile').first().click();
+    await anna.page.waitForFunction(() => /1 af 23/.test(document.querySelector('.viewer__who small')?.textContent || ''), null, { timeout: 5000 });
+    await anna.page.keyboard.press('ArrowRight');
+    await anna.page.waitForFunction(() => /2 af 23/.test(document.querySelector('.viewer__who small')?.textContent || ''), null, { timeout: 5000 });
+    await anna.page.getByRole('button', { name: 'Luk', exact: true }).click();
+    await anna.page.locator('.photo-filter .chip', { hasText: 'Alle · 24' }).click();
+    await anna.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 24, null, { timeout: 5000 });
+
     // The host turns the disposable camera off: photos are shared at once again.
     await tab(host, 'Mig');
     await host.page.locator('.switch-row', { hasText: 'Engangskamera' }).click();

@@ -39,7 +39,7 @@ export function PgEventApp({ room }) {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
-    eventUi.set({ tab: 'course', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, pgHole: null, camera: false, photo: null });
+    eventUi.set({ tab: 'course', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, pgHole: null, camera: false, photo: null, show: false, comments: false, scope: null, photosBy: null });
     rememberEvent(room.code, { name: d.meta.name, host: d.isHost, type: 'pubgolf' });
     restorePhotos(room);
     if (d.isHost && d.players.size <= 1 && !storage.load(`invited:${room.roomId}`)) {

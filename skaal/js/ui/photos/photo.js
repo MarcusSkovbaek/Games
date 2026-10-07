@@ -8,7 +8,7 @@ import { toggleReaction } from '../../app/actions.js';
 import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
 import { sfx, haptic } from '../feedback.js';
-import { fmtAgo, fmtClock, fmtWhen } from '../format.js';
+import { fmtAgo, fmtClock, fmtWhen, genitive } from '../format.js';
 import { CommentsPanel, openComments } from './comments.js';
 
 export const LIKE = '❤️';
@@ -151,13 +151,13 @@ function SetTile({ room, d, photo, more }) {
   </button>`;
 }
 
-function PhotoTile({ room, d, photo, badge }) {
+function PhotoTile({ room, d, photo, badge, scope }) {
   const ref = useRef(null);
   const thumb = useThumb(room, photo, useNear(ref));
   const p = d.players.get(photo.pid);
   const likes = likesOf(d, photo.key);
   const talk = d.comments.get(photo.key)?.length || 0;
-  return html`<button type="button" ref=${ref} class="photo-tile" onClick=${() => eventUi.set({ photo: photo.key })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
+  return html`<button type="button" ref=${ref} class="photo-tile" onClick=${() => eventUi.set({ photo: photo.key, scope })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
     <${PhotoFrame} src=${thumb.url} />
     ${!thumb.url ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} short />
@@ -171,19 +171,43 @@ function PhotoTile({ room, d, photo, badge }) {
   </button>`;
 }
 
-export function PhotoGrid({ room, d, photos, badge }) {
-  return html`<div class="photo-grid">${photos.map((ph) => html`<${PhotoTile} key=${ph.key} room=${room} d=${d} photo=${ph} badge=${badge} />`)}</div>`;
+// `scope`: the grid shows one person's photos — the viewer then goes through those.
+export function PhotoGrid({ room, d, photos, badge, scope = null }) {
+  return html`<div class="photo-grid">${photos.map((ph) => html`<${PhotoTile} key=${ph.key} room=${room} d=${d} photo=${ph} badge=${badge} scope=${scope} />`)}</div>`;
 }
 
-// The evening as a slideshow: every photo in the order they were taken, a few seconds each.
-export const playEvening = (d) => {
-  const first = d.photos[d.photos.length - 1];
-  if (first) eventUi.set({ photo: first.key, show: true });
+// The photos of one person (scope = their pid), or everyone's.
+export const photosBy = (d, scope) => (scope ? d.photos.filter((ph) => ph.pid === scope) : d.photos);
+
+// Above the photo grid: everyone's photos, or one person's (most photos first).
+export function PhotoFilter({ d, value, onChange }) {
+  const counts = new Map();
+  for (const ph of d.photos) counts.set(ph.pid, (counts.get(ph.pid) || 0) + 1);
+  if (counts.size < 2) return null;
+  const people = [...counts].sort((a, b) => b[1] - a[1] || (d.players.get(a[0])?.name || '').localeCompare(d.players.get(b[0])?.name || '', 'da'));
+  return html`<div class="chips chips--scroll photo-filter" role="group" aria-label="Vis billeder fra">
+    <button type="button" class=${cx('chip', !value && 'is-active')} aria-pressed=${!value} onClick=${() => onChange(null)}>Alle · ${d.photos.length}</button>
+    ${people.map(([pid, n]) => {
+      const p = d.players.get(pid);
+      return html`<button type="button" class=${cx('chip', value === pid && 'is-active')} aria-pressed=${value === pid} onClick=${() => onChange(value === pid ? null : pid)}>
+        <${Avatar} player=${p} size=${26} />${pid === d.me ? 'Dig' : p?.name || 'En gæst'} · ${n}
+      </button>`;
+    })}
+  </div>`;
+}
+
+// The evening as a slideshow: every photo in the order they were taken, a few seconds each (or
+// one person's photos).
+export const playEvening = (d, scope = null) => {
+  const photos = photosBy(d, scope);
+  const first = photos[photos.length - 1];
+  if (first) eventUi.set({ photo: first.key, show: true, scope });
 };
 
-export function PlayButton({ d, label = 'Afspil aftenen' }) {
-  if (d.photos.length < 2) return null;
-  return html`<${Button} variant="secondary" block icon="play" onClick=${() => playEvening(d)}>${label}<//>`;
+export function PlayButton({ d, label = 'Afspil aftenen', scope = null }) {
+  if (photosBy(d, scope).length < 2) return null;
+  const who = scope && d.players.get(scope);
+  return html`<${Button} variant="secondary" block icon="play" onClick=${() => playEvening(d, scope)}>${who ? `Afspil ${scope === d.me ? 'dine' : genitive(who.name)} billeder` : label}<//>`;
 }
 
 // While the on-screen keyboard is up, the viewer ends above it (so the comment field stays in
@@ -216,7 +240,10 @@ export function PhotoViewer({ room, d, extra }) {
   const key = useStore(eventUi, (s) => s.photo);
   const show = useStore(eventUi, (s) => !!s.show);
   const comments = useStore(eventUi, (s) => s.comments || false);
-  const photos = d.photos;
+  // Opened from one person's photos: those (as long as the photo shown is one of them).
+  const scope = useStore(eventUi, (s) => s.scope || null);
+  const scoped = scope ? photosBy(d, scope) : null;
+  const photos = scoped?.some((ph) => ph.key === key) ? scoped : d.photos;
   const index = photos.findIndex((ph) => ph.key === key);
   const photo = index >= 0 ? photos[index] : null;
   const [confirm, setConfirm] = useState(false);
@@ -225,7 +252,7 @@ export function PhotoViewer({ room, d, extra }) {
   const root = useRef(null);
   useModalFocus(root, !!photo);
   const close = () => {
-    eventUi.set({ photo: null, show: false, comments: false });
+    eventUi.set({ photo: null, show: false, comments: false, scope: null });
     setConfirm(false);
   };
   const closeComments = () => eventUi.set({ comments: false });
@@ -321,8 +348,8 @@ export function PhotoViewer({ room, d, extra }) {
   };
   const play = () => {
     if (show) eventUi.set({ show: false });
-    // From the newest photo, the evening starts over from the first one.
-    else eventUi.set({ show: true, photo: later ? photo.key : photos[photos.length - 1].key });
+    // From the newest photo, the evening (or the person's photos) starts over from the first one.
+    else eventUi.set({ show: true, photo: later ? photo.key : photos[photos.length - 1].key, scope: photos === scoped ? scope : null });
   };
   const running = show && !held && !zoomed && !confirm && !comments && !!(full.url || full.failed);
   const talk = d.comments.get(photo.key)?.length || 0;

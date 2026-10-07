@@ -119,6 +119,7 @@ kamerarullen kan du vælge op til 10 billeder ad gangen og dele dem samlet.
 - **Afspil aftenen:** Under *Fotos* (og på slutskærmen) afspiller *Afspil aftenen* alle billederne
   som et lysbilledshow i den rækkefølge, de blev taget — med klokkeslæt og en bjælke, der viser
   tiden. Hold fingeren på billedet for at holde pause, og stryg for at springe frem eller tilbage.
+  Øverst under *Fotos* kan du vælge én persons billeder — så viser, bladrer og afspiller du dem.
   Indtil det første billede er taget, minder storskærmen gæsterne om, at de kan tage billeder.
 - **Kommentarer:** Skriv under et billede (💬 i billedet eller i feedet). De nyeste kommentarer står
   under billedet i feedet og på storskærmen, og den, der tog billedet, får besked med en

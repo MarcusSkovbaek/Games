@@ -6,7 +6,7 @@ import { gameById } from '../../minigames/index.js';
 import { toggleReaction } from '../../app/actions.js';
 import { fmtAgo } from '../format.js';
 import { haptic } from '../feedback.js';
-import { FeedPhoto, FeedPhotoSet, PhotoGrid, PlayButton } from '../photos/photo.js';
+import { FeedPhoto, FeedPhotoSet, PhotoGrid, PlayButton, PhotoFilter, photosBy } from '../photos/photo.js';
 import { FeedComments, CommentButton } from '../photos/comments.js';
 import { CameraCard, DevelopCard } from '../photos/layer.js';
 import { eventUi } from './event.js';
@@ -113,6 +113,8 @@ function Reactions({ room, d, itemKey }) {
 export function FeedTab({ room, d }) {
   const [limit, setLimit] = useState(60);
   const view = useStore(eventUi, (s) => s.feedView || 'all');
+  // One person's photos (a pid), or everyone's.
+  const by = useStore(eventUi, (s) => (d.photos.some((ph) => ph.pid === s.photosBy) ? s.photosBy : null));
   const items = d.feed;
   const photos = d.photos;
   return html`<div class="stack">
@@ -132,7 +134,9 @@ export function FeedTab({ room, d }) {
     />
     ${view === 'photos'
       ? photos.length
-        ? html`<${PlayButton} d=${d} /><${PhotoGrid} room=${room} d=${d} photos=${photos} />`
+        ? html`<${PhotoFilter} d=${d} value=${by} onChange=${(photosBy) => eventUi.set({ photosBy })} />
+            <${PlayButton} d=${d} scope=${by} />
+            <${PhotoGrid} room=${room} d=${d} photos=${photosBy(d, by)} scope=${by} />`
         : html`<${Empty}
             icon="camera"
             title=${d.undeveloped.length ? 'Ingen billeder fremkaldt endnu' : 'Ingen billeder endnu'}

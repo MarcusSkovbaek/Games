@@ -26,7 +26,7 @@ import { restorePhotos } from '../../app/photos.js';
 import { stopTourSong } from '../tourSong.js';
 
 // UI state that should survive switching tabs.
-export const eventUi = createStore({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, camera: false, photo: null, show: false, comments: false, feedView: 'all' });
+export const eventUi = createStore({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, camera: false, photo: null, show: false, comments: false, scope: null, feedView: 'all', photosBy: null });
 
 export function EventRoute({ code }) {
   const [attempt, setAttempt] = useState(0);
@@ -110,7 +110,7 @@ function EventApp({ room }) {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     // Every event starts on the drinks tab with nothing open.
-    eventUi.set({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, camera: false, photo: null, show: false, comments: false, feedView: 'all' });
+    eventUi.set({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, camera: false, photo: null, show: false, comments: false, scope: null, feedView: 'all', photosBy: null });
     rememberEvent(room.code, { name: d.meta.name, host: d.isHost, type: d.meta.type || 'party' });
     restorePhotos(room);
     // A fresh host gets the invitation (QR code) straight away.

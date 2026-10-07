@@ -7857,6 +7857,17 @@ button.pg-edit__emoji {
   color: var(--text-2);
 }
 
+.photo-filter .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 7px;
+}
+
+.photo-filter .chip:first-child {
+  padding-left: 16px;
+}
+
 /* Full-screen viewer */
 .viewer {
   position: fixed;

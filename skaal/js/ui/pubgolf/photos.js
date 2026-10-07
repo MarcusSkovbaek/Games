@@ -1,11 +1,11 @@
 // The "Fotos" tab in pub golf: photos from the round (taken with the camera in the app, seen by
 // everyone in the event) — and the photo competition, whose podium the judge sets.
-import { html, Empty, cx } from '../kit.js';
+import { html, useStore, Empty, cx } from '../kit.js';
 import { setPodium } from '../../app/actions.js';
 import { toast } from '../ui-store.js';
 import { sfx } from '../feedback.js';
 import { eventUi } from '../screens/event.js';
-import { PhotoThumb, PhotoGrid, PlayButton } from '../photos/photo.js';
+import { PhotoThumb, PhotoGrid, PlayButton, PhotoFilter, photosBy } from '../photos/photo.js';
 import { CameraCard, DevelopCard } from '../photos/layer.js';
 import { MEDALS } from './common.js';
 
@@ -15,6 +15,8 @@ const placeOfPhoto = (pg, key) => (pg.results.get(photoComp(pg)?.id)?.places || 
 export function PhotosTab({ room, d }) {
   const pg = d.pg;
   const comp = photoComp(pg);
+  // One person's photos (a pid), or everyone's.
+  const by = useStore(eventUi, (s) => (d.photos.some((ph) => ph.pid === s.photosBy) ? s.photosBy : null));
   const winners = (pg.results.get(comp?.id)?.places || []).map((pl) => (pl ? d.photoByKey.get(pl.photo) : null));
   const badge = (ph) => {
     const place = placeOfPhoto(pg, ph.key);
@@ -49,7 +51,9 @@ export function PhotosTab({ room, d }) {
     <${DevelopCard} room=${room} d=${d} />
 
     ${d.photos.length
-      ? html`<${PlayButton} d=${d} label="Afspil runden" /><${PhotoGrid} room=${room} d=${d} photos=${d.photos} badge=${badge} />`
+      ? html`<${PhotoFilter} d=${d} value=${by} onChange=${(photosBy) => eventUi.set({ photosBy })} />
+          <${PlayButton} d=${d} label="Afspil runden" scope=${by} />
+          <${PhotoGrid} room=${room} d=${d} photos=${photosBy(d, by)} badge=${badge} scope=${by} />`
       : d.undeveloped.length || d.settings.disposable
         ? html`<${Empty}
             icon="camera"

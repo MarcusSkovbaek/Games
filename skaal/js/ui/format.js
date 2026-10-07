@@ -9,6 +9,9 @@ export function fmtDecimal(n, digits = 1) {
   return (Number(n) || 0).toFixed(digits).replace('.', ',');
 }
 
+// Danish genitive: "Annas", "Jonas'".
+export const genitive = (name) => (/[sxz]$/i.test(name) ? `${name}'` : `${name}s`);
+
 export function plural(n, one, many) {
   return `${fmtPoints(n)} ${Math.abs(n) === 1 ? one : many}`;
 }
