@@ -5854,6 +5854,10 @@ button.pg-edit__emoji {
   font-weight: 800;
 }
 
+.pg-final > .btn {
+  margin-top: 16px;
+}
+
 .pg-final__best {
   display: flex;
   align-items: center;
