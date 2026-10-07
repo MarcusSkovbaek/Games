@@ -133,7 +133,7 @@ export function FeedPhoto({ room, d, photo, compact }) {
   const open = () => eventUi.set({ photo: photo.key });
   return html`<button type="button" ref=${ref} class=${cx('feed-photo', compact && 'feed-photo--compact')} style=${{ aspectRatio: compact ? '4 / 3' : String(ratio(photo)) }} onClick=${open} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
     <${PhotoFrame} src=${full.url || thumb.url} class=${cx(!full.url && 'is-thumb', developing(d, photo, thumb.url || full.url))} />
-    ${thumb.url || full.url ? null : thumb.failed ? html`<${Gone} />` : html`<span class="feed-photo__wait"><${Spinner} /></span>`}
+    ${thumb.url || full.url ? null : thumb.failed ? html`<${Gone} />` : near ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} />
   </button>`;
 }
@@ -149,7 +149,8 @@ export function FeedPhotoSet({ room, d, photos, compact }) {
 
 function SetTile({ room, d, photo, more }) {
   const ref = useRef(null);
-  const thumb = useThumb(room, photo, useNear(ref));
+  const near = useNear(ref);
+  const thumb = useThumb(room, photo, near);
   return html`<button
     type="button"
     ref=${ref}
@@ -159,7 +160,7 @@ function SetTile({ room, d, photo, more }) {
     aria-label=${`Åbn ${photoLabel(d, photo)}${more ? ` (og ${more} mere)` : ''}`}
   >
     <${PhotoFrame} src=${thumb.url} class=${developing(d, photo, thumb.url)} />
-    ${thumb.url ? null : thumb.failed ? html`<${Gone} />` : html`<span class="feed-photo__wait"><${Spinner} /></span>`}
+    ${thumb.url ? null : thumb.failed ? html`<${Gone} />` : near ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} short />
     ${more ? html`<span class="feed-set__more" aria-hidden="true">+${more}</span>` : null}
   </button>`;
@@ -167,13 +168,14 @@ function SetTile({ room, d, photo, more }) {
 
 function PhotoTile({ room, d, photo, badge, scope }) {
   const ref = useRef(null);
-  const thumb = useThumb(room, photo, useNear(ref));
+  const near = useNear(ref);
+  const thumb = useThumb(room, photo, near);
   const p = d.players.get(photo.pid);
   const likes = likesOf(d, photo.key);
   const talk = d.comments.get(photo.key)?.length || 0;
   return html`<button type="button" ref=${ref} class="photo-tile" onClick=${() => eventUi.set({ photo: photo.key, scope })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
     <${PhotoFrame} src=${thumb.url} class=${developing(d, photo, thumb.url)} />
-    ${thumb.url ? null : thumb.failed ? html`<${Gone} />` : html`<span class="photo-tile__wait"><${Spinner} /></span>`}
+    ${thumb.url ? null : thumb.failed ? html`<${Gone} />` : near ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} short />
     ${badge?.(photo)}
     <span class="photo-tile__foot" aria-hidden="true">
