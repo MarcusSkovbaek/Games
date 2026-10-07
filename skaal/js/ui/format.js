@@ -77,7 +77,3 @@ export function fmtSince(ms) {
   const h = Math.floor(m / 60);
   return `${h} t ${m % 60} min`;
 }
-
-export function rankLabel(rank) {
-  return `${rank}.`;
-}

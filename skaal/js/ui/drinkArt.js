@@ -179,10 +179,6 @@ function Svg({ draw, size, className }) {
 
 const ART = { beer: Beer, shot: Shot, drink: Cocktail, jager: Jager, water: Water, wine: Wine, cider: Cider };
 
-export function hasArt(id) {
-  return !!ART[id];
-}
-
 export function DrinkArt({ id, size = 64, class: className }) {
   const draw = ART[id];
   if (!draw) {

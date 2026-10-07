@@ -115,10 +115,6 @@ export function closeEvent() {
   session.set({ code: null, room: null, status: 'idle', sync: null });
 }
 
-export function currentRoom() {
-  return current?.room || null;
-}
-
 // ------------------------------------------------------------------------------- derived
 
 let cache = { room: null, version: -1, sec: -1, d: null };
