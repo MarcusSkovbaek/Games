@@ -48,6 +48,30 @@ export function useStore(store, selector = (s) => s) {
 }
 
 // Re-render every `ms` (aligned to the shared clock) while mounted.
+// Keeps the screen on while `on` (the big screen, a slideshow) — and again after the page has been
+// away, as the browser lets go of the lock then.
+export function useWakeLock(on = true) {
+  useEffect(() => {
+    if (!on || !navigator.wakeLock) return undefined;
+    let lock = null;
+    let live = true;
+    const take = () => {
+      if (document.visibilityState !== 'visible') return;
+      navigator.wakeLock
+        .request('screen')
+        .then((l) => (live ? (lock = l) : l.release()))
+        .catch(() => {});
+    };
+    take();
+    document.addEventListener('visibilitychange', take);
+    return () => {
+      live = false;
+      document.removeEventListener('visibilitychange', take);
+      lock?.release?.().catch(() => {});
+    };
+  }, [on]);
+}
+
 export function useNow(ms = 1000) {
   const [t, setT] = useState(now);
   useEffect(() => {

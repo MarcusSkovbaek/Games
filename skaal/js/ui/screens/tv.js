@@ -1,5 +1,5 @@
 // Big-screen mode (#/tv/<code>): a read-only live view for a TV or laptop at the party.
-import { html, useState, useEffect, useStore, useNow, Avatar, Icon, Ring, Spinner } from '../kit.js';
+import { html, useState, useEffect, useStore, useNow, useWakeLock, Avatar, Icon, Ring, Spinner } from '../kit.js';
 import { session, openEvent, closeEvent, getDerived } from '../../app/session.js';
 import { isValidCode, formatCode } from '../../core/ids.js';
 import { now } from '../../core/clock.js';
@@ -38,14 +38,13 @@ export function TvRoute({ code }) {
   const room = useStore(session, (s) => (s.code === code ? s.room : null));
   useStore(session, (s) => s.version);
   useNow(1000);
+  // The big screen stays on all evening (also after the browser was away for a moment).
+  useWakeLock(true);
 
   useEffect(() => {
     if (!isValidCode(code)) return;
     openEvent(code).catch((err) => console.error('[tv] open failed', err));
-    let lock = null;
-    navigator.wakeLock?.request('screen').then((l) => (lock = l)).catch(() => {});
     return () => {
-      lock?.release?.().catch(() => {});
       stopTourSong();
       closeEvent();
     };

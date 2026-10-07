@@ -311,8 +311,16 @@ const scenarios = {
     assert.equal(await derived(bo, (d) => d.mePlayer.counts.shot), 2, 'state survives a reload');
 
     const tv = await env.phone('tv', { width: 1280, height: 760, scale: 1 });
+    // The big screen keeps itself on — again after the browser was away (which lets go of the lock).
+    await tv.page.addInitScript(() => {
+      window.__locks = 0;
+      Object.defineProperty(navigator, 'wakeLock', { value: { request: async () => (window.__locks++, { release: async () => {} }) } });
+    });
     await tv.page.goto(env.appUrl(`#/tv/${code}`));
     await tv.page.waitForSelector('.tv__board .board-row');
+    await tv.page.waitForFunction(() => window.__locks === 1);
+    await tv.page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await tv.page.waitForFunction(() => window.__locks === 2);
     await shot(tv.page, 'e2e-tv');
     const qrVisible = await tv.page.locator('.tv__invite .qr').evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight);
     assert.ok(qrVisible, 'TV join QR fits on screen');

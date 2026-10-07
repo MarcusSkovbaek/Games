@@ -2,7 +2,7 @@
 // <img> — so the browser offers no "save image", no long-press menu and no dragging it out.
 // Thumbnails are on every phone already; the full-size photo is fetched (and decrypted) only when
 // someone looks at it.
-import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, Avatar, Button, Icon, IconButton, Spinner, cx } from '../kit.js';
+import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, useWakeLock, Avatar, Button, Icon, IconButton, Spinner, cx } from '../kit.js';
 import { loadFull, cachedFull, loadThumb, cachedThumb, removePhoto, captionPhoto, PHOTO } from '../../app/photos.js';
 import { toggleReaction } from '../../app/actions.js';
 import { eventUi } from '../screens/event.js';
@@ -316,26 +316,7 @@ export function PhotoViewer({ room, d, extra }) {
     }
   }, [index]);
   // Keep the screen on while the slideshow plays.
-  const playing = show && !!photo;
-  useEffect(() => {
-    if (!playing) return undefined;
-    let lock = null;
-    let live = true;
-    const take = () => {
-      if (document.visibilityState !== 'visible') return;
-      navigator.wakeLock
-        ?.request('screen')
-        .then((l) => (live ? (lock = l) : l.release()))
-        .catch(() => {});
-    };
-    take();
-    document.addEventListener('visibilitychange', take);
-    return () => {
-      live = false;
-      document.removeEventListener('visibilitychange', take);
-      lock?.release?.().catch(() => {});
-    };
-  }, [playing]);
+  useWakeLock(show && !!photo);
 
   const thumb = useThumb(room, photo, !!photo);
   const full = useFullPhoto(room, photo, !!photo);
