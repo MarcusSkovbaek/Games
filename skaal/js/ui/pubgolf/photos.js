@@ -1,5 +1,6 @@
 // The "Fotos" tab in pub golf: photos from the round (taken with the camera in the app, seen by
-// everyone in the event) — and the photo competition, whose podium the judge sets.
+// everyone in the event) — and the photo competition: the players upload an entry each from their
+// photo albums, and the judge sets the podium.
 import { html, useStore, Empty, cx } from '../kit.js';
 import { setPodium } from '../../app/actions.js';
 import { toast } from '../ui-store.js';
@@ -8,6 +9,7 @@ import { eventUi } from '../screens/event.js';
 import { PhotoThumb, PhotoGrid, PlayButton, PhotoFilter, photosBy } from '../photos/photo.js';
 import { CameraCard, DevelopCard } from '../photos/layer.js';
 import { MEDALS } from './common.js';
+import { EntryCard } from './entry.js';
 
 export const photoComp = (pg) => pg.comps.find((c) => c.kind === 'photo');
 const placeOfPhoto = (pg, key) => (pg.results.get(photoComp(pg)?.id)?.places || []).findIndex((pl) => pl?.photo === key);
@@ -47,7 +49,8 @@ export function PhotosTab({ room, d }) {
         </section>`
       : null}
 
-    <${CameraCard} room=${room} d=${d} text=${comp ? 'Alle i eventet kan se det — de bedste kan vinde fotokonkurrencen' : null} />
+    <${EntryCard} room=${room} d=${d} comp=${comp} />
+    <${CameraCard} room=${room} d=${d} />
     <${DevelopCard} room=${room} d=${d} />
 
     ${d.photos.length
@@ -58,23 +61,24 @@ export function PhotosTab({ room, d }) {
         ? html`<${Empty}
             icon="camera"
             title=${d.undeveloped.length ? 'Ingen billeder fremkaldt endnu' : 'Ingen billeder endnu'}
-            text=${`Billeder fra engangskameraet dukker op her, når de er fremkaldt — 24 timer efter, de er taget.${comp ? ' Så kårer dommeren de bedste i fotokonkurrencen.' : ''}`}
+            text="Billeder fra engangskameraet dukker op her, når de er fremkaldt — 24 timer efter, de er taget."
           />`
         : html`<${Empty}
             icon="camera"
             title="Ingen billeder endnu"
-            text=${comp ? 'Tag det første billede — de bedste kan vinde fotokonkurrencen.' : 'Tag det første billede fra runden — alle i eventet kan se det.'}
+            text="Tag det første billede fra runden — alle i eventet kan se det."
           />`}
   </div>`;
 }
 
-// Below a photo in the viewer: its team and place — and, for the judge, the podium buttons (also
-// after the end, when photos from the disposable camera may only just have developed).
+// Below a photo in the viewer: its team and place — and for an entry in the photo competition, the
+// judge's podium buttons (also after the end: the judge may decide the morning after).
 export function PhotoPlaces({ room, d, photo }) {
   const pg = d.pg;
   const comp = photoComp(pg);
   if (!comp) return null;
   const place = placeOfPhoto(pg, photo.key);
+  const entry = !!pg.entries.get(comp.id)?.some((ph) => ph.key === photo.key);
   const team = pg.teamById.get(pg.players.get(photo.pid)?.team);
   const name = d.players.get(photo.pid)?.name;
   const set = (i) => {
@@ -85,13 +89,17 @@ export function PhotoPlaces({ room, d, photo }) {
     toast(next[i] ? `${MEDALS[i]} ${comp.name}: ${i + 1}.-plads til ${name}` : `${comp.name}: pladsen er fjernet`, { tone: 'good' });
   };
   return html`<div class="viewer__extra">
-    ${team || place >= 0
+    ${team || place >= 0 || entry
       ? html`<div class="viewer__tags">
           ${team ? html`<span class="team-chip" style=${{ '--tc': team.color }}><span class="team-chip__dot" style=${{ background: team.color }}></span><span>${team.name}</span></span>` : null}
-          ${place >= 0 ? html`<span class="viewer__medal">${MEDALS[place]} ${place + 1}.-plads i ${comp.name.toLowerCase()}</span>` : null}
+          ${place >= 0
+            ? html`<span class="viewer__medal">${MEDALS[place]} ${place + 1}.-plads i ${comp.name.toLowerCase()}</span>`
+            : entry
+              ? html`<span class="viewer__medal">${comp.emoji} Med i ${comp.name.toLowerCase()}</span>`
+              : null}
         </div>`
       : null}
-    ${pg.isJudge
+    ${pg.isJudge && entry
       ? html`<div class="viewer__places" role="group" aria-label=${comp.name}>
           ${MEDALS.map(
             (m, i) => html`<button type="button" class=${cx('chip', place === i && 'is-active')} aria-pressed=${place === i} onClick=${() => set(i)}>${m} ${i + 1}.-plads</button>`,

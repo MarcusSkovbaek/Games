@@ -7904,11 +7904,102 @@ button.pg-edit__emoji {
   color: var(--text-2);
 }
 
-.pg-photo-pick__note {
+/* Pub golf's photo competition: the entries, and the way in. */
+.pg-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 12px;
+}
+
+.pg-entries:empty {
+  display: none;
+}
+
+.pg-entries__count {
   font-size: 13px;
-  line-height: 1.45;
+  font-weight: 700;
   color: var(--text-2);
+}
+
+.pg-entries .photo-grid {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.pg-entries__mine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.pg-entries__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pg-entries__ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.entry-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.entry-card__icon {
+  flex: none;
+  font-size: 26px;
+}
+
+.entry-card__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.entry-card__text strong {
+  font-size: 15px;
+}
+
+.entry-card__text small {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.entry-card .btn {
+  flex: none;
+}
+
+.entry-sheet__photo.photo-frame {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: min(52vh, 420px);
+  border-radius: 16px;
+  background-color: var(--surface-2);
+}
+
+.entry-sheet__wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 200px;
+  color: var(--text-2);
+  text-align: center;
 }
 
 .photo-filter .chip {

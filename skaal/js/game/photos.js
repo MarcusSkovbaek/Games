@@ -1,10 +1,12 @@
 // Photos from the evening, for every kind of event. Pure derivation from the logs (see
 // app/photos.js for taking, storing and loading them).
 //
-//   photo  { a, cap, w, h, f, th, ds }  a photo named a. th = 1: its thumbnail is fetched when
+//   photo  { a, cap, w, h, f, th, ds, c }  a photo named a. th = 1: its thumbnail is fetched when
 //                                needed (see sync/room.js); without th it is the shared image `a`
 //                                (photos from the first versions). f = 1: there is a full-size
 //                                version. ds = 1: taken with the disposable camera (see DISPOSABLE).
+//                                c: entered in pub golf's photo competition c — uploaded from the
+//                                phone, seen by everyone at once (never from the disposable camera).
 //   pcap   { k, cap }            a new caption for photo k — by the one who took it
 //   pc     { k, txt }            a comment on photo k
 //   phide  { k }                 hide photo or comment k — the host (and in pub golf the judge at
@@ -24,6 +26,7 @@ export const COMMENT_MAX = 200;
 export const DISPOSABLE = { shots: 23, developMs: 24 * 3600_000 };
 
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
+const compOf = (e) => (typeof e.c === 'string' && /^[a-z0-9-]{1,24}$/i.test(e.c) ? e.c : null);
 const dim = (v) => (Number.isFinite(v) && v > 0 && v < 20000 ? Math.round(v) : 0);
 
 // `list(type)` gives the valid log entries of a type in time order (see derive.js); `canHide(pid,
@@ -43,7 +46,7 @@ export function derivePhotos({ list, assets = {}, canHide, voided = [], t = 0 })
   // The disposable camera's frames, in the order they were shot (deleted shots included).
   const shots = new Map();
   const frame = new Map();
-  const film = [...list('photo'), ...voided].filter(({ e }) => e.ds === 1).sort((a, b) => a.e.ts - b.e.ts || (a.e.id < b.e.id ? -1 : 1));
+  const film = [...list('photo'), ...voided].filter(({ e }) => e.ds === 1 && !compOf(e)).sort((a, b) => a.e.ts - b.e.ts || (a.e.id < b.e.id ? -1 : 1));
   for (const { pid, e } of film) {
     shots.set(pid, (shots.get(pid) || 0) + 1);
     frame.set(`${pid}:${e.id}`, shots.get(pid));
@@ -57,7 +60,8 @@ export function derivePhotos({ list, assets = {}, canHide, voided = [], t = 0 })
   for (const { pid, e } of list('photo')) {
     const key = `${pid}:${e.id}`;
     if (typeof e.a !== 'string' || !e.a.startsWith(photoPrefix(pid))) continue;
-    const ds = e.ds === 1;
+    const comp = compOf(e);
+    const ds = e.ds === 1 && !comp;
     if (hidden.has(key) || (ds && frame.get(key) > DISPOSABLE.shots)) {
       gone.add(e.a);
       continue;
@@ -67,7 +71,7 @@ export function derivePhotos({ list, assets = {}, canHide, voided = [], t = 0 })
     if (asset && !asset.data) continue; // deleted by the one who took it (first versions)
     const shown = ds ? e.ts + DISPOSABLE.developMs : e.ts;
     const cap = str(caps.has(key) ? caps.get(key) : e.cap, 140);
-    const photo = { key, id: e.id, pid, asset: e.a, lazy, thumb: asset?.data || null, full: e.f === 1, cap, w: dim(e.w), h: dim(e.h), ts: e.ts, ds, shown };
+    const photo = { key, id: e.id, pid, asset: e.a, lazy, thumb: asset?.data || null, full: e.f === 1, cap, w: dim(e.w), h: dim(e.h), ts: e.ts, ds, comp, shown };
     (t < shown ? undeveloped : photos).push(photo);
   }
   photos.sort((a, b) => b.ts - a.ts);
@@ -87,7 +91,8 @@ export function derivePhotos({ list, assets = {}, canHide, voided = [], t = 0 })
 // Photos shared in a row by the same person (several from the camera roll at once, a burst at the
 // bar) are one item in the feed: up to 12, each within 3 minutes of the one before. A single photo
 // stays an item of its own (its reactions are the photo's likes). Photos from the disposable camera
-// are in the feed from when they developed, apart from the others.
+// are in the feed from when they developed, apart from the others — as are entries in a photo
+// competition.
 export const SET_GAP_MS = 3 * 60_000;
 const SET_MAX = 12;
 
@@ -96,7 +101,8 @@ export function photoFeedItems(photos) {
   let cur = null;
   const at = (ph) => ph.shown ?? ph.ts;
   for (const ph of [...photos].sort((a, b) => at(a) - at(b))) {
-    if (cur && cur.pid === ph.pid && !!cur.photos[0].ds === !!ph.ds && at(ph) - cur.ts < SET_GAP_MS && cur.photos.length < SET_MAX) {
+    const alike = !!cur?.photos[0].ds === !!ph.ds && (cur?.photos[0].comp || null) === (ph.comp || null);
+    if (cur && cur.pid === ph.pid && alike && at(ph) - cur.ts < SET_GAP_MS && cur.photos.length < SET_MAX) {
       cur.photos.push(ph);
       cur.ts = at(ph);
     } else {

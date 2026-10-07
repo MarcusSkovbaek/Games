@@ -181,8 +181,8 @@ Slå **🎞️ Engangskamera** til, når eventet oprettes (fest eller pub golf),
   alle ("Anna fik fremkaldt 5 billeder fra engangskameraet"), og alle får besked.
 - **Kan slås fra igen:** Så deles billeder med det samme igen. Billeder, der allerede er taget med
   engangskameraet, fremkaldes stadig 24 timer efter, de blev taget.
-- **Pub golf:** Fotokonkurrencen skydes med engangskameraet, og dommeren kårer de bedste, når
-  billederne er fremkaldt — også efter runden er afsluttet.
+- **Pub golf:** Fotokonkurrencen gælder ikke engangskameraet: bidragene uploades fra fotoalbummet
+  og kan ses af alle med det samme (se [Pub golf](#pub-golf)).
 
 ## Pub golf
 
@@ -217,10 +217,14 @@ og antallet af slurke er ens slag — som i golf vinder den laveste score.
   de hemmelige, ser spillerne først en konkurrence, når dommeren trykker *Start* — så popper den op
   på alles telefoner og storskærmen. Dommeren kan også starte konkurrencerne, når de ikke er
   hemmelige, så alle får besked, når det går løs.
+- **Fotokonkurrencen:** Hver spiller uploader sit bedste billede fra telefonens fotoalbum — under
+  *Konkurrencer*, fra pop-up'en, når dommeren starter konkurrencen, eller øverst under *Fotos*.
+  Bidragene kan ses af alle med det samme, også når [engangskameraet](#engangskamera) er slået til,
+  og man kan skifte sit billede eller trække det tilbage, til dommeren har valgt. Dommeren sætter
+  podiet blandt bidragene — under *Konkurrencer* eller direkte fra et bidrag i fuld størrelse — også
+  efter runden.
 - **Fotos:** Billederne fra kameraet i appen (se [Fotos fra aftenen](#fotos-fra-aftenen)) ligger
-  også under *Fotos*, med holdets farve. Dommeren sætter fotokonkurrencens podie direkte fra et
-  billede i fuld størrelse — eller under *Konkurrencer*. Med [engangskameraet](#engangskamera)
-  afgøres fotokonkurrencen, når billederne er fremkaldt, også efter runden.
+  også under *Fotos*, med holdets farve, sammen med bidragene til fotokonkurrencen.
 - **Scorekort og storskærm:** Scorekortet viser alle huller for alle spillere. Storskærmen viser
   hullet, holdene, de bedste spillere, de seneste billeder og konkurrencevinderne, og *Afslut
   runden* fryser stillingen og kårer vinderholdet.

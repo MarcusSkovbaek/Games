@@ -27,7 +27,7 @@ import { stopTourSong } from '../tourSong.js';
 import { useBecameHost } from './handover.js';
 
 // UI state that should survive switching tabs.
-export const eventUi = createStore({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, camera: false, photo: null, show: false, comments: false, scope: null, feedView: 'all', photosBy: null });
+export const eventUi = createStore({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, camera: false, photo: null, show: false, comments: false, scope: null, feedView: 'all', photosBy: null, entry: null });
 
 export function EventRoute({ code }) {
   const [attempt, setAttempt] = useState(0);

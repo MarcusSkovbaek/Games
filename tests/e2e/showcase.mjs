@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { setup } from './lib.mjs';
-import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin, createPubGolf, joinPubGolf, pickPhoto, shootDisposable } from './helpers.mjs';
+import { photoOf, createEvent, joinEvent, logDrink, fastForward, tab, dismissPopups, startGame, derived, rigSpin, createPubGolf, joinPubGolf, pickPhoto, shootDisposable, enterPhotoComp } from './helpers.mjs';
 
 const OUT = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -272,10 +272,10 @@ try {
   await wait(800);
   await save(gSara.page, '16-pubgolf-stilling');
 
-  // Photos, and the photo competition's podium on every phone.
-  await pickPhoto(gAnna, await photoOf(env.browser, '🍻', '#f6d365,#fda085'), 'Skål fra Heidis!');
-  await pickPhoto(gBo, await photoOf(env.browser, '⛳', '#84fab0,#8fd3f4'), 'Hold Blå på green');
-  await pickPhoto(gSara, await photoOf(env.browser, '🎤', '#a18cd1,#fbc2eb'), 'Karaoke på Kihoskh');
+  // The photo competition: entries from the photo album, and the podium on every phone.
+  await enterPhotoComp(gAnna, await photoOf(env.browser, '🍻', '#f6d365,#fda085'), 'Skål fra Heidis!');
+  await enterPhotoComp(gBo, await photoOf(env.browser, '⛳', '#84fab0,#8fd3f4'), 'Hold Blå på green');
+  await enterPhotoComp(gSara, await photoOf(env.browser, '🎤', '#a18cd1,#fbc2eb'), 'Karaoke på Kihoskh');
   await tab(judge, 'Fotos');
   await judge.page.waitForFunction(() => document.querySelectorAll('.photo-tile').length === 3, null, { timeout: 10000 });
   for (const [i, name] of ['Anna', 'Sara', 'Bo'].entries()) {

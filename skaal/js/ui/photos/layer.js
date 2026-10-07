@@ -33,12 +33,17 @@ export function PhotoLayer({ room, d, extra }) {
     const name = d.players.get(newest.pid)?.name || 'En gæst';
     // Several in a row (picked together from the camera roll): one heads-up for them all.
     const n = d.feed.find((f) => f.kind === 'photos' && f.photos.some((ph) => ph.key === newest.key))?.photos.length || 1;
-    const text = !newest.ds
-      ? `📸 ${name} delte ${n === 1 ? 'et billede' : `${n} billeder`}`
-      : newest.pid === room.pid
-        ? `🎞️ ${n === 1 ? 'Et af dine billeder' : `${n} af dine billeder`} er fremkaldt`
-        : `🎞️ ${n === 1 ? 'Et billede' : `${n} billeder`} fra ${name} er fremkaldt`;
-    toast(text, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key, show: false, comments: false }) } });
+    // (An entry in pub golf's photo competition says so.)
+    const comp = newest.comp ? d.pg?.cfg.comps.find((c) => c.id === newest.comp) : null;
+    const text = comp
+      ? `${comp.emoji} ${name} sendte et billede ind til ${comp.name}`
+      : !newest.ds
+        ? `📸 ${name} delte ${n === 1 ? 'et billede' : `${n} billeder`}`
+        : newest.pid === room.pid
+          ? `🎞️ ${n === 1 ? 'Et af dine billeder' : `${n} af dine billeder`} er fremkaldt`
+          : `🎞️ ${n === 1 ? 'Et billede' : `${n} billeder`} fra ${name} er fremkaldt`;
+    const scope = comp ? `comp:${comp.id}` : null;
+    toast(text, { key: 'photo', duration: 4500, action: { label: 'Se', onClick: () => eventUi.set({ photo: newest.key, show: false, comments: false, scope }) } });
   }, [newest?.key]);
 
   // Someone comments on one of our photos (unless we are reading that photo's comments).

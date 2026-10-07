@@ -216,6 +216,36 @@ test('photos: the judge hides and sets the photo podium, which rewards the team'
   assert.equal(derive({ ...room, pid: 'judy0000' }, T0 + 600 * MIN).canHidePhotos, true);
 });
 
+test('the photo competition: an entry each, uploaded — seen at once, also with the disposable camera', () => {
+  const room = makeRoom({ meta: { settings: normalizeSettings({ breakerMin: 0, disposable: true }) } });
+  const name = (pid, n) => `${photoPrefix(pid)}${n}`;
+  room.add('anna0000', { t: 'team', p: 'anna0000', team: 't1' });
+  room.add('bo000000', { t: 'team', p: 'bo000000', team: 't2' });
+  room.add('anna0000', { t: 'photo', a: name('anna0000', 'shot01'), f: 1, th: 1, ds: 1 }); // the disposable camera
+  const first = room.add('anna0000', { t: 'photo', a: name('anna0000', 'entry1'), cap: 'Første', f: 1, th: 1, c: 'photo' });
+  // A new entry takes the place of the first (which the app deletes) — and is never disposable.
+  const again = room.add('anna0000', { t: 'photo', a: name('anna0000', 'entry2'), cap: 'Bedre', f: 1, th: 1, c: 'photo', ds: 1 });
+  room.add('anna0000', { t: 'x', r: first.id });
+  const bo = room.add('bo000000', { t: 'photo', a: name('bo000000', 'entry1'), cap: 'Hold 2', f: 1, th: 1, c: 'photo' });
+  room.add('bo000000', { t: 'photo', a: name('bo000000', 'other1'), cap: 'Bare et billede', f: 1, th: 1 });
+  room.add('cara0000', { t: 'photo', a: name('cara0000', 'entry1'), f: 1, th: 1, c: 'nope' }); // no such competition
+  let d = derive(room, T0 + 10 * MIN);
+  assert.deepEqual(d.pg.entries.get('photo').map((ph) => ph.cap), ['Hold 2', 'Bedre'], 'one each, newest first');
+  assert.deepEqual(d.photos.map((ph) => ph.cap).sort(), ['', 'Bare et billede', 'Bedre', 'Hold 2'], 'entries are seen at once');
+  assert.equal(d.undeveloped.length, 1, 'the shot from the disposable camera still develops');
+  assert.equal(d.shotsUsed, 1, 'entries take no film');
+  const items = d.feed.filter((f) => f.kind === 'photo' || f.kind === 'photos').filter((f) => f.pid === 'bo000000');
+  assert.equal(items.length, 2, 'an entry is an item of its own in the feed');
+  room.add('judy0000', { t: 'podium', c: 'photo', photos: [`anna0000:${again.id}`, `bo000000:${bo.id}`] });
+  d = derive(room, T0 + 10 * MIN);
+  assert.deepEqual(d.pg.results.get('photo').places.map((pl) => pl && pl.team), ['t1', 't2', null]);
+  // Anna takes hers back: gone from the entries and the podium.
+  room.add('anna0000', { t: 'x', r: again.id });
+  d = derive(room, T0 + 10 * MIN);
+  assert.deepEqual(d.pg.entries.get('photo').map((ph) => ph.cap), ['Hold 2']);
+  assert.deepEqual(d.pg.results.get('photo').places.map((pl) => pl && pl.team), [null, 't2', null]);
+});
+
 test('secret competitions: players see one only once the judge starts it (or decides it)', () => {
   const room = makeRoom();
   const ids = room.state.meta.pg.comps.map((c) => c.id);

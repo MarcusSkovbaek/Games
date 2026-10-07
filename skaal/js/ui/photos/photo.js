@@ -192,8 +192,13 @@ export function PhotoGrid({ room, d, photos, badge, scope = null }) {
   return html`<div class="photo-grid">${photos.map((ph) => html`<${PhotoTile} key=${ph.key} room=${room} d=${d} photo=${ph} badge=${badge} scope=${scope} />`)}</div>`;
 }
 
-// The photos of one person (scope = their pid), or everyone's.
-export const photosBy = (d, scope) => (scope ? d.photos.filter((ph) => ph.pid === scope) : d.photos);
+// The photos of one person (scope = their pid), the entries in a pub golf photo competition
+// (scope = `comp:<id>`), or everyone's.
+export const photosBy = (d, scope) => {
+  if (!scope) return d.photos;
+  if (scope.startsWith('comp:')) return d.pg?.entries.get(scope.slice(5)) || [];
+  return d.photos.filter((ph) => ph.pid === scope);
+};
 
 // Above the photo grid: everyone's photos, or one person's (most photos first).
 export function PhotoFilter({ d, value, onChange }) {

@@ -129,18 +129,27 @@ export async function bitmapFromFile(file) {
 // ------------------------------------------------------------------------ sharing, deleting
 
 // `disposable`: taken with the disposable camera — nobody sees it until it has developed (see
-// DISPOSABLE in game/photos.js).
-export async function sharePhoto(room, prepared, caption = '', { disposable = false } = {}) {
+// DISPOSABLE in game/photos.js). `comp`: entered in pub golf's photo competition of that id
+// (never disposable).
+export async function sharePhoto(room, prepared, caption = '', { disposable = false, comp = null } = {}) {
   if (!room.strong) throw new Error('Photos need an event with a 12-character code');
   const name = `${photoPrefix(room.pid)}${randomId(6)}`;
   const sealed = await room.publishPhoto(name, prepared.thumb, prepared.full);
-  if (!disposable) {
+  if (comp || !disposable) {
     show(thumbs, name, prepared.thumb);
     show(fulls, name, prepared.full);
   }
   keep(room, name, sealed);
   const cap = String(caption || '').trim().slice(0, PHOTO.captionMax);
-  return room.append({ t: 'photo', a: name, cap, w: prepared.w, h: prepared.h, f: 1, th: 1, ...(disposable ? { ds: 1 } : {}) });
+  return room.append({ t: 'photo', a: name, cap, w: prepared.w, h: prepared.h, f: 1, th: 1, ...(comp ? { c: comp } : disposable ? { ds: 1 } : {}) });
+}
+
+// A player's photo for the photo competition. It takes the place of their earlier entry, which
+// is deleted once the new one is in.
+export async function enterCompetition(room, comp, prepared, caption, previous = null) {
+  const entry = await sharePhoto(room, prepared, caption, { comp });
+  if (previous?.pid === room.pid) removePhotos(room, [previous]);
+  return entry;
 }
 
 // Your own photo is deleted; anyone else's is hidden (host, or the pub golf judge). Either way it

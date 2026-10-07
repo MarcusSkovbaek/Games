@@ -16,6 +16,7 @@ import { StandingsTab } from './standings.js';
 import { CompetitionsTab } from './comps.js';
 import { PhotosTab, PhotoPlaces } from './photos.js';
 import { PgMeTab } from './me.js';
+import { EntrySheet } from './entry.js';
 import { ChallengeOverlay, CompStartOverlay, PodiumOverlay } from './overlays.js';
 import { holeTitle } from './common.js';
 import { useBecameHost } from '../screens/handover.js';
@@ -41,7 +42,7 @@ export function PgEventApp({ room }) {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
-    eventUi.set({ tab: 'course', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, pgHole: null, camera: false, photo: null, show: false, comments: false, scope: null, photosBy: null });
+    eventUi.set({ tab: 'course', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, pgHole: null, camera: false, photo: null, show: false, comments: false, scope: null, photosBy: null, entry: null });
     rememberEvent(room.code, { name: d.meta.name, host: d.isHost, type: 'pubgolf' });
     restorePhotos(room);
     if (d.isHost && d.players.size <= 1 && !storage.load(`invited:${room.roomId}`)) {
@@ -111,5 +112,6 @@ export function PgEventApp({ room }) {
     <${InboxPopup} room=${room} d=${d} />
     <${InviteSheet} room=${room} d=${d} open=${ui.invite} onClose=${() => eventUi.set({ invite: false })} />
     <${PhotoLayer} room=${room} d=${d} extra=${(photo) => html`<${PhotoPlaces} room=${room} d=${d} photo=${photo} />`} />
+    <${EntrySheet} room=${room} d=${d} />
   </div>`;
 }

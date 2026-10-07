@@ -118,6 +118,27 @@ export async function pickPhoto(ph, buffer, caption = '') {
   await ph.page.waitForSelector('.camera', { state: 'detached' });
 }
 
+// Enters pub golf's photo competition with a picture from the photo album: from the competition's
+// card, looked over, sent in (a new one takes the place of an earlier entry).
+export async function enterPhotoComp(ph, buffer, caption = '') {
+  await tab(ph, 'Konkurrencer');
+  const chooser = ph.page.waitForEvent('filechooser');
+  await ph.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).getByRole('button', { name: /^(Upload dit billede|Skift billede)$/ }).click();
+  await (await chooser).setFiles({ name: 'album.jpg', mimeType: 'image/jpeg', buffer });
+  await ph.page.waitForSelector('.entry-sheet__photo', { timeout: 10000 });
+  if (caption) await ph.page.fill('.sheet.is-open input.input', caption);
+  await ph.page.getByRole('button', { name: 'Send ind', exact: true }).click();
+  await ph.page.waitForFunction(
+    (cap) => {
+      const d = window.__skaal.derived();
+      return d.pg.entries.get('photo')?.some((e) => e.pid === d.me && e.cap === cap);
+    },
+    caption,
+    { timeout: 10000 },
+  );
+  await ph.page.waitForSelector('.sheet.is-open', { state: 'detached', timeout: 5000 });
+}
+
 async function sharePhotoFromReview(ph, caption) {
   await ph.page.waitForSelector('.camera__review', { timeout: 10000 });
   if (caption) await ph.page.fill('.camera__form input', caption);

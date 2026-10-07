@@ -10,7 +10,7 @@ import { eventUi } from '../screens/event.js';
 import { TeamBadge, MEDALS, entrantName, entrantColor } from './common.js';
 import { CrownWinner } from './challenge.js';
 import { PhotoThumb } from '../photos/photo.js';
-import { canTakePhotos } from '../photos/layer.js';
+import { canEnter, entryOf, pickEntry } from './entry.js';
 
 const isLive = (ts, t) => t - ts < PG.momentMs && ts - t < 120_000;
 
@@ -123,7 +123,7 @@ function CompStartMoment({ room, d, item, tv, onClose }) {
   useOverlayMount(tv, () => sfx.fanfare());
   const [b1, b2, b3] = pg.cfg.compBonus;
   const photo = comp?.kind === 'photo';
-  const shoot = photo && !tv && canTakePhotos(room, d);
+  const upload = photo && !tv && canEnter(room, d, comp);
   return html`<div class=${cx('overlay pg-moment', tv && 'pg-moment--tv')} style=${{ '--c': 'var(--gold)' }} role="dialog" aria-modal="true" aria-label=${`${comp?.name || 'Konkurrence'} starter`} onClick=${tv ? onClose : null}>
     <div class="overlay__inner">
       <div class="overlay__head">
@@ -137,30 +137,26 @@ function CompStartMoment({ room, d, item, tv, onClose }) {
         <div class="pg-moment__icon" aria-hidden="true">${comp?.emoji || '🏆'}</div>
         <p class="pg-moment__text">${comp?.name || 'Konkurrence'}</p>
         <p class="pg-moment__sub">
-          ${!photo
-            ? 'Dommeren afgør, hvem der vinder.'
-            : d.settings.disposable
-              ? 'Tag jeres bedste billeder med engangskameraet — dommeren kårer de bedste, når de er fremkaldt.'
-              : 'Tag jeres bedste billeder — dommeren vælger podiet.'}
+          ${!photo ? 'Dommeren afgør, hvem der vinder.' : 'Upload dit bedste billede fra fotoalbummet — alle kan se bidragene, og dommeren vælger podiet.'}
           ${b1 || b2 || b3 ? ` Podiet giver ${b1}, ${b2} og ${b3} slag i bonus.` : ''}
         </p>
         ${tv
           ? null
           : html`<div class="pg-moment__actions">
-              ${shoot
+              ${upload
                 ? html`<${Button}
                     size="lg"
                     block
-                    icon="camera"
+                    icon="upload"
                     onClick=${() => {
+                      pickEntry(comp.id);
                       onClose();
-                      eventUi.set({ camera: true });
                     }}
                   >
-                    Tag et billede
+                    ${entryOf(d, comp) ? 'Skift dit billede' : 'Upload dit billede'}
                   <//>`
                 : null}
-              <${Button} size="lg" block variant=${shoot ? 'secondary' : 'primary'} onClick=${onClose}>Vi er klar! 💪<//>
+              <${Button} size="lg" block variant=${upload ? 'secondary' : 'primary'} onClick=${onClose}>Vi er klar! 💪<//>
             </div>`}
       </div>
     </div>

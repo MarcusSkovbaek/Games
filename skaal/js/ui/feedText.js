@@ -101,6 +101,10 @@ export function FeedText({ d, item, emoji = false }) {
       const n = photos.length;
       // From the disposable camera: in the feed from when they developed.
       const cap = photos.find((ph) => ph.cap)?.cap;
+      if (photos[0].comp) {
+        const comp = d.pg?.cfg.comps.find((c) => c.id === photos[0].comp);
+        return html`${emoji ? `${comp?.emoji || '📸'} ` : ''}${who} sendte et billede ind til ${B(comp?.name || 'fotokonkurrencen')}${cap ? html`: <span class="feed-item__quote">“${cap}”</span>` : null}`;
+      }
       if (photos[0].ds) {
         return html`${emoji ? '🎞️ ' : ''}${who} fik fremkaldt ${n === 1 ? 'et billede' : `${n} billeder`} fra engangskameraet <span class="faint">(taget ${fmtWhen(photos[0].ts, d.t)})</span>${cap ? html`: <span class="feed-item__quote">“${cap}”</span>` : null}`;
       }

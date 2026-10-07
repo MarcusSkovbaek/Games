@@ -22,6 +22,7 @@ import {
   takePhoto,
   pickPhoto,
   shootDisposable,
+  enterPhotoComp,
 } from './helpers.mjs';
 import { startBroker } from '../support/broker.mjs';
 
@@ -704,8 +705,29 @@ const scenarios = {
     await anna.page.waitForSelector('.photo-tile__likes', { timeout: 5000 });
     assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'the photo gallery is accessible');
 
-    // The judge puts Anna's photo first in the photo competition: a podium pops up everywhere.
+    // The photo competition: Anna uploads her entry from the photo album — everyone sees it in the
+    // competition (and under Fotos). Only entries can go on the podium.
     await host.page.locator('.photo-tile', { hasText: 'Anna' }).click();
+    await host.page.waitForSelector('.viewer');
+    assert.equal(await host.page.locator('.viewer__places').count(), 0, 'a photo that isn’t entered can’t win');
+    await host.page.getByRole('button', { name: 'Luk', exact: true }).click();
+    await enterPhotoComp(anna, await photoOf(env.browser, '🏆', '#f6d365,#fda085'), 'Hold Rød på green');
+    await sara.page.locator('.toast', { hasText: 'Anna sendte et billede ind til Fotokonkurrence' }).waitFor({ timeout: 8000 });
+    await tab(sara, 'Konkurrencer');
+    const entries = sara.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).locator('.pg-entries');
+    await entries.locator('.photo-tile').waitFor({ timeout: 8000 });
+    assert.match(await entries.textContent(), /1 bidrag/);
+    assert.equal(await anna.page.locator('.pg-entries__ok').textContent(), 'Dit billede er med');
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the photo competition with an entry is accessible');
+    await shot(anna.page, 'e2e-pg-photo-entry');
+    // Under Fotos, those who haven't entered are asked to.
+    await tab(sara, 'Fotos');
+    await sara.page.locator('.entry-card').getByRole('button', { name: 'Upload' }).waitFor();
+    assert.deepEqual(await axeViolations(sara.page, axeSource), [], 'the photos with the way into the competition are accessible');
+    await shot(sara.page, 'e2e-pg-entry-card');
+    // The judge puts it first: a podium pops up everywhere.
+    await tab(host, 'Konkurrencer');
+    await host.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).locator('.photo-tile').click();
     await host.page.locator('.viewer__places').getByRole('button', { name: /🥇 1\.-plads/ }).click();
     for (const ph of [anna, bo, sara, tv]) await ph.page.waitForSelector('.pg-moment--podium', { timeout: 6000 });
     assert.equal(await host.page.locator('.pg-moment').count(), 0, 'no pop-up for the judge who set it');
@@ -1389,8 +1411,8 @@ const scenarios = {
     const ownCopies = /^(photo|full|thumb|photos|thumbs):/;
     assert.deepEqual(await filesLeft(bo, ownCopies), [], 'the copies leave with the event');
 
-    // Pub golf: the players shoot the photo competition blind, and the judge decides it once the
-    // photos have developed — after the round has ended.
+    // Pub golf with the disposable camera: the photo competition isn't shot blind — the players
+    // upload their entries from the photo album, and everyone sees them at once.
     const { ph: ida, code: golf } = await createPubGolf(env, { host: 'Ida', team: 'Hold Blå', disposable: true });
     const kim = await joinPubGolf(env, golf, 'Kim', { team: 'Hold Rød' });
     assert.equal(await derived(kim, (d) => d.settings.disposable), true);
@@ -1398,11 +1420,31 @@ const scenarios = {
     await ida.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).getByRole('button', { name: 'Start', exact: true }).click();
     await ida.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Start', exact: true }).click();
     await kim.page.waitForSelector('.pg-moment', { timeout: 6000 });
-    assert.match(await kim.page.locator('.pg-moment__sub').textContent(), /engangskameraet/);
-    await kim.page.locator('.pg-moment').getByRole('button', { name: 'Tag et billede' }).click();
+    assert.match(await kim.page.locator('.pg-moment__sub').textContent(), /fotoalbummet/);
+    // Straight from the pop-up into the photo album.
+    const chooser = kim.page.waitForEvent('filechooser');
+    await kim.page.locator('.pg-moment').getByRole('button', { name: 'Upload dit billede' }).click();
+    await (await chooser).setFiles({ name: 'album.jpg', mimeType: 'image/jpeg', buffer: await photoOf(env.browser, '🥂', '#f6d365,#fda085') });
+    await kim.page.waitForSelector('.entry-sheet__photo', { timeout: 10000 });
+    await kim.page.fill('.sheet.is-open input.input', 'Holdbillede');
+    assert.deepEqual(await axeViolations(kim.page, axeSource), [], 'sending in an entry is accessible');
+    await shot(kim.page, 'e2e-pg-entry-sheet');
+    await kim.page.getByRole('button', { name: 'Send ind', exact: true }).click();
+    await kim.page.waitForSelector('.pg-entries__ok', { timeout: 10000 });
+    for (const ph of [ida, kim]) {
+      await ph.page.waitForFunction(() => window.__skaal.derived().photos.some((p) => p.cap === 'Holdbillede'), null, { timeout: 8000 });
+      assert.equal(await derived(ph, (d) => d.undeveloped.length), 0, 'seen at once, not developing');
+    }
+    await ida.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).locator('.photo-tile .photo-frame[style*="blob:"]').waitFor({ timeout: 10000 });
+    // Kim swaps it for a better one: the first is gone, from the competition and the photos.
+    await enterPhotoComp(kim, await photoOf(env.browser, '🏌️', '#84fab0,#8fd3f4'), 'Endnu bedre');
+    await ida.page.waitForFunction(() => window.__skaal.derived().pg.entries.get('photo')?.map((p) => p.cap).join() === 'Endnu bedre', null, { timeout: 8000 });
+    assert.equal(await derived(ida, (d) => d.photos.filter((p) => p.cap === 'Holdbillede').length), 0);
+    assert.equal(await derived(kim, (d) => d.shotsUsed), 0, 'entries take no film');
+    // Kim opens the disposable camera; the judge starts the next competition meanwhile: a heads-up
+    // on top, and the pop-up waits for him (longer than a pop-up usually stays).
+    await kim.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
     await kim.page.waitForSelector('.dispo');
-    // The judge starts the next competition while Kim is in the camera: a heads-up on top, and the
-    // pop-up waits for him (longer than a pop-up usually stays).
     await ida.page.locator('.pg-comp', { hasText: 'Bedste outfit' }).getByRole('button', { name: 'Start', exact: true }).click();
     await ida.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Start', exact: true }).click();
     await kim.page.locator('.toast', { hasText: 'Bedste outfit starter!' }).waitFor({ timeout: 8000 });
@@ -1415,18 +1457,19 @@ const scenarios = {
     await kim.page.waitForSelector('.pg-moment', { state: 'detached' });
     await tab(kim, 'Fotos');
     await kim.page.waitForSelector('.develop-card');
-    assert.equal(await kim.page.locator('.photo-tile').count(), 0);
-    await tab(kim, 'Konkurrencer');
-    assert.match(await kim.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).textContent(), /fremkaldes 24 timer efter/);
+    assert.equal(await kim.page.locator('.photo-tile').count(), 1, 'his entry is there; his shot is developing');
+    // The round ends: no more entries — and the judge decides the morning after.
     await tab(ida, 'Mig');
     await ida.page.getByRole('button', { name: /Afslut runden/ }).click();
     await ida.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Afslut', exact: true }).click();
     await kim.page.waitForFunction(() => window.__skaal.derived().ended > 0, null, { timeout: 6000 });
-    await fastForward([ida, kim], DAY + 5000);
-    await ida.page.waitForFunction(() => window.__skaal.derived().photos.length === 1, null, { timeout: 8000 });
-    await tab(ida, 'Fotos');
-    await ida.page.locator('.photo-tile').first().click();
-    await ida.page.locator('.viewer__places').getByRole('button', { name: /🥇 1\.-plads/ }).click();
+    await tab(kim, 'Konkurrencer');
+    assert.equal(await kim.page.getByRole('button', { name: /^(Upload dit billede|Skift billede)$/ }).count(), 0, 'closed once the round is over');
+    await fastForward([ida, kim], 10 * 3600_000);
+    await tab(ida, 'Konkurrencer');
+    await ida.page.locator('.pg-comp', { hasText: 'Fotokonkurrence' }).getByRole('button', { name: 'Sæt podiet' }).click();
+    await ida.page.locator('.pg-photo-pick__item').first().click();
+    await ida.page.getByRole('button', { name: 'Gem podiet' }).click();
     await kim.page.waitForFunction(() => window.__skaal.derived().pg.results.get('photo')?.places[0]?.pid === window.__skaal.derived().me, null, { timeout: 8000 });
     assert.deepEqual(await derived(kim, (d) => d.pg.teams.map((tm) => [tm.name, tm.bon])), [['Hold Rød', 3], ['Hold Blå', 0]], 'the photo podium counts after the end');
     assertNoErrors([...all, tv, ida, kim]);

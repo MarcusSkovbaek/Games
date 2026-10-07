@@ -76,7 +76,7 @@ export function CompsEditor({ comps, onChange }) {
     ${comps.length < 12
       ? html`<${Button} variant="secondary" icon="plus" onClick=${() => onChange([...comps, { id: `c${randomId(6)}`, name: '', emoji: '🏆', kind: 'team' }])}>Tilføj konkurrence<//>`
       : null}
-    <span class="field__hint">Dommeren sætter podiet for hver konkurrence. Fotokonkurrencen afgøres ud fra de delte billeder.</span>
+    <span class="field__hint">Dommeren sætter podiet for hver konkurrence. I fotokonkurrencen uploader hver spiller sit bedste billede fra fotoalbummet.</span>
   </div>`;
 }
 

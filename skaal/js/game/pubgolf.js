@@ -17,7 +17,8 @@
 //   pgvis   { show }               whether players see the competitions before they start
 //                                  (default yes; the latest one counts)       — officials
 //   chal    { c | text }           a challenge for the teams                  — officials
-// Photos (and hiding them) work as in every event — see game/photos.js.
+// Photos (and hiding them) work as in every event — see game/photos.js. A photo entered in the
+// photo competition carries its id (photo { c }); each player's latest one is their entry.
 // Officials are the host and the judge. The host appoints the judge (meta.judges keeps every
 // appointment with its time); a judge's entries count for the time they were judge.
 
@@ -207,7 +208,7 @@ export function fmtToPar(n) {
 
 // Builds the pub golf part of the derived state. `list(type)` gives the valid log entries of a
 // type in time order (see derive.js), `players` the derived players, `photoByKey` the event's
-// photos (for the photo competition).
+// photos (the photo competition's entries are among them).
 export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, me }) {
   const cfg = normalizePg(meta.pg);
   const { judge, hostId, officialAt } = officialsOf(meta);
@@ -277,11 +278,19 @@ export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, 
     started.set(e.c, start);
     feed.push({ key: start.key, ts: e.ts, kind: 'pgcomp', pid, comp: e.c });
   }
+  // The photo competitions' entries: each player's latest photo entered in one (newest first).
+  const entries = new Map(cfg.comps.filter((c) => c.kind === 'photo').map((c) => [c.id, []]));
+  const entered = new Set();
+  for (const ph of [...photoByKey.values()].sort((a, b) => b.ts - a.ts)) {
+    if (!entries.has(ph.comp) || !players.has(ph.pid) || entered.has(`${ph.comp}|${ph.pid}`)) continue;
+    entered.add(`${ph.comp}|${ph.pid}`);
+    entries.get(ph.comp).push(ph);
+  }
   const results = new Map(); // compId → { places: [{ team?, pid?, photo? } | null ×3], by, ts, key }
   for (const { pid, e } of list('podium')) {
     const comp = compById.get(e.c);
     if (!officialAt(pid, e.ts) || !comp) continue;
-    // After the end only the photo competition can be decided (its photos may still be developing).
+    // After the end only the photo competition can be decided (say, the morning after).
     if (meta.ended && e.ts > meta.ended && comp.kind !== 'photo') continue;
     let places;
     if (comp.kind === 'photo' && Array.isArray(e.photos)) {
@@ -406,6 +415,7 @@ export function derivePubGolf({ meta, players, list, photoByKey = new Map(), t, 
     secretComps: cfg.comps.filter(secret),
     compsOnShow,
     started,
+    entries,
     challenges,
     feed,
     now: t,
