@@ -100,10 +100,10 @@ export function FeedText({ d, item, emoji = false }) {
       const photos = item.photos || [item.photo];
       const n = photos.length;
       // From the disposable camera: in the feed from when they developed.
-      if (photos[0].ds) {
-        return html`${emoji ? '🎞️ ' : ''}${who} fik fremkaldt ${n === 1 ? 'et billede' : `${n} billeder`} fra engangskameraet <span class="faint">(taget ${fmtWhen(photos[0].ts, d.t)})</span>`;
-      }
       const cap = photos.find((ph) => ph.cap)?.cap;
+      if (photos[0].ds) {
+        return html`${emoji ? '🎞️ ' : ''}${who} fik fremkaldt ${n === 1 ? 'et billede' : `${n} billeder`} fra engangskameraet <span class="faint">(taget ${fmtWhen(photos[0].ts, d.t)})</span>${cap ? html`: <span class="feed-item__quote">“${cap}”</span>` : null}`;
+      }
       return html`${emoji ? '📸 ' : ''}${who} delte ${n === 1 ? 'et billede' : `${n} billeder`}${cap ? html`: <span class="feed-item__quote">“${cap}”</span>` : null}`;
     }
     case 'pgchal':

@@ -129,6 +129,11 @@ export function removePhoto(room, photo) {
   removePhotos(room, [photo]);
 }
 
+// A new caption for our own photo (empty takes it off).
+export function captionPhoto(room, photo, text) {
+  return room.append({ t: 'pcap', k: photo.key, cap: String(text || '').trim().slice(0, PHOTO.captionMax) });
+}
+
 export function commentPhoto(room, photo, text) {
   const txt = String(text || '').trim().slice(0, COMMENT_MAX);
   return txt ? room.append({ t: 'pc', k: photo.key, txt }) : null;

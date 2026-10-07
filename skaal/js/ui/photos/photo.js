@@ -3,7 +3,7 @@
 // Thumbnails are on every phone already; the full-size photo is fetched (and decrypted) only when
 // someone looks at it.
 import { html, useState, useEffect, useLayoutEffect, useRef, useStore, useModalFocus, Avatar, Button, Icon, IconButton, Spinner, cx } from '../kit.js';
-import { loadFull, cachedFull, loadThumb, cachedThumb, removePhoto } from '../../app/photos.js';
+import { loadFull, cachedFull, loadThumb, cachedThumb, removePhoto, captionPhoto, PHOTO } from '../../app/photos.js';
 import { toggleReaction } from '../../app/actions.js';
 import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
@@ -247,6 +247,7 @@ export function PhotoViewer({ room, d, extra }) {
   const index = photos.findIndex((ph) => ph.key === key);
   const photo = index >= 0 ? photos[index] : null;
   const [confirm, setConfirm] = useState(false);
+  const [editing, setEditing] = useState(false); // writing the caption of our own photo
   const [held, setHeld] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const root = useRef(null);
@@ -254,14 +255,16 @@ export function PhotoViewer({ room, d, extra }) {
   const close = () => {
     eventUi.set({ photo: null, show: false, comments: false, scope: null });
     setConfirm(false);
+    setEditing(false);
   };
   const closeComments = () => eventUi.set({ comments: false });
-  const kb = useKeyboardInset(!!photo && !!comments);
+  const kb = useKeyboardInset(!!photo && (!!comments || editing));
   const go = (step) => {
     const next = photos[index + step];
     if (next) {
       eventUi.set({ photo: next.key });
       setConfirm(false);
+      setEditing(false);
     }
   };
 
@@ -272,7 +275,7 @@ export function PhotoViewer({ room, d, extra }) {
   // The keys always act on the photo shown now (the handler outlives the render it was made in).
   // Escape closes the comments first; the arrows leave a comment being written alone.
   const keys = useRef(null);
-  keys.current = { close: comments ? closeComments : close, go };
+  keys.current = { close: editing ? () => setEditing(false) : comments ? closeComments : close, go };
   // (A layout effect, so the keys work from the moment the viewer is on screen.)
   useLayoutEffect(() => {
     if (!photo) return undefined;
@@ -351,7 +354,7 @@ export function PhotoViewer({ room, d, extra }) {
     // From the newest photo, the evening (or the person's photos) starts over from the first one.
     else eventUi.set({ show: true, photo: later ? photo.key : photos[photos.length - 1].key, scope: photos === scoped ? scope : null });
   };
-  const running = show && !held && !zoomed && !confirm && !comments && !!(full.url || full.failed);
+  const running = show && !held && !zoomed && !confirm && !editing && !comments && !!(full.url || full.failed);
   const talk = d.comments.get(photo.key)?.length || 0;
   return html`<div
     class=${cx('viewer', show && 'is-show', comments && 'is-talking')}
@@ -386,28 +389,73 @@ export function PhotoViewer({ room, d, extra }) {
     ${comments
       ? html`<${CommentsPanel} room=${room} d=${d} photo=${photo} write=${comments === 'write'} onClose=${closeComments} />`
       : html`<footer class="viewer__bottom">
-      ${photo.cap ? html`<p class="viewer__cap">${photo.cap}</p>` : null}
-      ${confirm
-        ? html`<div class="viewer__confirm" role="group" aria-label="Bekræft">
-            <span>${mine ? 'Slet billedet for alle?' : `Skjul billedet fra ${p?.name} for alle?`}</span>
-            <button type="button" class="btn btn--secondary btn--sm" onClick=${() => setConfirm(false)}>Annullér</button>
-            <button type="button" class="btn btn--danger btn--sm" onClick=${remove}>${mine ? 'Slet' : 'Skjul'}</button>
-          </div>`
-        : html`<div class="viewer__bar">
-            <button type="button" class=${cx('viewer__like', liked && 'is-on')} aria-pressed=${liked} onClick=${like}>
-              <span aria-hidden="true">${LIKE}</span> ${likes || ''}<span class="sr-only">${liked ? 'Fjern like' : 'Like'}</span>
-            </button>
-            <button type="button" class="viewer__talk" onClick=${() => openComments(photo, talk ? 'read' : 'write')}>
-              <${Icon} name="message-circle" size=${18} /> ${talk || ''}<span class="sr-only">${talk ? `${talk === 1 ? 'kommentar' : 'kommentarer'}` : 'Skriv en kommentar'}</span>
-            </button>
-            <span class="spacer"></span>
-            ${canRemove
-              ? html`<button type="button" class="viewer__action" onClick=${() => setConfirm(true)}><${Icon} name=${mine ? 'trash' : 'eye'} size=${18} />${mine ? 'Slet' : 'Skjul'}</button>`
-              : null}
-          </div>`}
+      ${editing
+        ? html`<${CaptionForm}
+            photo=${photo}
+            onSave=${(text) => {
+              captionPhoto(room, photo, text);
+              setEditing(false);
+            }}
+            onCancel=${() => setEditing(false)}
+          />`
+        : mine && !confirm && (photo.cap || !show)
+          ? html`<button type="button" class=${cx('viewer__cap viewer__cap--edit', !photo.cap && 'is-empty')} onClick=${() => setEditing(true)} aria-label=${photo.cap ? `Ret teksten: ${photo.cap}` : 'Skriv en tekst til billedet'}>
+              <span>${photo.cap || 'Skriv en tekst …'}</span><${Icon} name="pencil" size=${14} />
+            </button>`
+          : photo.cap
+            ? html`<p class="viewer__cap">${photo.cap}</p>`
+            : null}
+      ${editing
+        ? null
+        : confirm
+          ? html`<div class="viewer__confirm" role="group" aria-label="Bekræft">
+              <span>${mine ? 'Slet billedet for alle?' : `Skjul billedet fra ${p?.name} for alle?`}</span>
+              <button type="button" class="btn btn--secondary btn--sm" onClick=${() => setConfirm(false)}>Annullér</button>
+              <button type="button" class="btn btn--danger btn--sm" onClick=${remove}>${mine ? 'Slet' : 'Skjul'}</button>
+            </div>`
+          : html`<div class="viewer__bar">
+              <button type="button" class=${cx('viewer__like', liked && 'is-on')} aria-pressed=${liked} onClick=${like}>
+                <span aria-hidden="true">${LIKE}</span> ${likes || ''}<span class="sr-only">${liked ? 'Fjern like' : 'Like'}</span>
+              </button>
+              <button type="button" class="viewer__talk" onClick=${() => openComments(photo, talk ? 'read' : 'write')}>
+                <${Icon} name="message-circle" size=${18} /> ${talk || ''}<span class="sr-only">${talk ? `${talk === 1 ? 'kommentar' : 'kommentarer'}` : 'Skriv en kommentar'}</span>
+              </button>
+              <span class="spacer"></span>
+              ${canRemove
+                ? html`<button type="button" class="viewer__action" onClick=${() => setConfirm(true)}><${Icon} name=${mine ? 'trash' : 'eye'} size=${18} />${mine ? 'Slet' : 'Skjul'}</button>`
+                : null}
+            </div>`}
       ${extra ? extra(photo) : null}
     </footer>`}
   </div>`;
+}
+
+// Writing (or changing) the caption of our own photo, at the bottom of the viewer.
+function CaptionForm({ photo, onSave, onCancel }) {
+  const [text, setText] = useState(photo.cap);
+  const input = useRef(null);
+  useEffect(() => input.current?.focus({ preventScroll: true }), []);
+  const save = (e) => {
+    e.preventDefault();
+    onSave(text);
+  };
+  return html`<form class="viewer__capform" onSubmit=${save}>
+    <input
+      ref=${input}
+      class="input"
+      maxlength=${PHOTO.captionMax}
+      placeholder="Skriv en tekst …"
+      aria-label="Tekst til billedet"
+      enterkeyhint="done"
+      autocomplete="off"
+      value=${text}
+      onInput=${(e) => setText(e.currentTarget.value)}
+    />
+    <div class="btn-row">
+      <button type="button" class="btn btn--secondary btn--sm" onClick=${onCancel}>Annullér</button>
+      <button type="submit" class="btn btn--primary btn--sm">Gem teksten</button>
+    </div>
+  </form>`;
 }
 
 const RESET = { s: 1, x: 0, y: 0, dx: 0, live: false };

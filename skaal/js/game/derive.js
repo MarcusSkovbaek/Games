@@ -10,9 +10,10 @@ import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
 import { derivePubGolf, officialsOf } from './pubgolf.js';
 import { derivePhotos, photoFeedItems } from './photos.js';
 
-// After the end only acknowledgements, reactions, photos, comments — and the podium of the pub golf
-// photo competition (its photos may still be developing, see derivePubGolf) — still come in.
-const AFTER_END = new Set(['ack', 'react', 'photo', 'pc', 'phide', 'pghide', 'podium']);
+// After the end only acknowledgements, reactions, photos, captions, comments — and the podium of
+// the pub golf photo competition (its photos may still be developing, see derivePubGolf) — still
+// come in.
+const AFTER_END = new Set(['ack', 'react', 'photo', 'pcap', 'pc', 'phide', 'pghide', 'podium']);
 
 // Player identity colours: a categorical palette validated for colour-blind separation and
 // contrast against the app's dark surface. Assigned in fixed slot order as players join.

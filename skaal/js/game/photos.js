@@ -5,6 +5,7 @@
 //                                needed (see sync/room.js); without th it is the shared image `a`
 //                                (photos from the first versions). f = 1: there is a full-size
 //                                version. ds = 1: taken with the disposable camera (see DISPOSABLE).
+//   pcap   { k, cap }            a new caption for photo k — by the one who took it
 //   pc     { k, txt }            a comment on photo k
 //   phide  { k }                 hide photo or comment k — the host (and in pub golf the judge at
 //                                the time)
@@ -48,6 +49,9 @@ export function derivePhotos({ list, assets = {}, canHide, voided = [], t = 0 })
     frame.set(`${pid}:${e.id}`, shots.get(pid));
   }
   for (const [pid, n] of shots) shots.set(pid, Math.min(n, DISPOSABLE.shots));
+  // Captions written (or changed) afterwards — the latest counts.
+  const caps = new Map();
+  for (const { pid, e } of list('pcap')) if (typeof e.k === 'string' && e.k.startsWith(`${pid}:`)) caps.set(e.k, e.cap);
   const photos = [];
   const undeveloped = [];
   for (const { pid, e } of list('photo')) {
@@ -62,7 +66,8 @@ export function derivePhotos({ list, assets = {}, canHide, voided = [], t = 0 })
     const asset = lazy ? null : assets[e.a];
     if (asset && !asset.data) continue; // deleted by the one who took it (first versions)
     const shown = ds ? e.ts + DISPOSABLE.developMs : e.ts;
-    const photo = { key, id: e.id, pid, asset: e.a, lazy, thumb: asset?.data || null, full: e.f === 1, cap: str(e.cap, 140), w: dim(e.w), h: dim(e.h), ts: e.ts, ds, shown };
+    const cap = str(caps.has(key) ? caps.get(key) : e.cap, 140);
+    const photo = { key, id: e.id, pid, asset: e.a, lazy, thumb: asset?.data || null, full: e.f === 1, cap, w: dim(e.w), h: dim(e.h), ts: e.ts, ds, shown };
     (t < shown ? undeveloped : photos).push(photo);
   }
   photos.sort((a, b) => b.ts - a.ts);

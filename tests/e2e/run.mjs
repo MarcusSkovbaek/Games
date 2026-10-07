@@ -1137,6 +1137,13 @@ const scenarios = {
     assert.match(await anna.page.locator('.viewer__who small').textContent(), /🎞️ taget i går kl\./);
     await anna.page.waitForFunction(() => /blob:/.test(document.querySelector('.viewer__photo')?.style.backgroundImage || ''), null, { timeout: 10000 });
     await shot(anna.page, 'e2e-disposable-developed');
+    // She writes a caption for it now (the disposable camera has no room for one).
+    await anna.page.getByRole('button', { name: 'Skriv en tekst til billedet' }).click();
+    await anna.page.fill('.viewer__capform input', 'Fra i går 🎞️');
+    await shot(anna.page, 'e2e-caption-edit');
+    await anna.page.getByRole('button', { name: 'Gem teksten' }).click();
+    await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Fra i går 🎞️'), null, { timeout: 8000 });
+    assert.match(await anna.page.locator('.viewer__cap').textContent(), /Fra i går/);
     // A minigame that starts while she looks at a photo can't be seen under it: a heads-up on top
     // takes her to it.
     await tab(host, 'Spil');

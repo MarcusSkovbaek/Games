@@ -125,6 +125,8 @@ kamerarullen kan du vælge op til 10 billeder ad gangen og dele dem samlet.
   under billedet i feedet og på storskærmen, og den, der tog billedet, får besked med en
   *Svar*-knap. Man kan slette sine egne kommentarer, og værten (i pub golf også dommeren) kan skjule
   andres.
+- **Tekst bagefter:** Tryk på teksten under dit eget billede (eller *Skriv en tekst …*) for at
+  skrive eller rette den — også på billeder fra engangskameraet, når de er fremkaldt.
 - **Like, slet og skjul:** Alle kan give et ❤️. Man kan slette sine egne billeder, og værten — i
   pub golf også dommeren — kan skjule andres. Begge dele fjerner billedet fra alles telefoner og fra
   serverne. Under **Mig → Fotos** kan værten slå fotos fra og slette alle aftenens billeder på én

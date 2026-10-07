@@ -288,3 +288,14 @@ test('pub golf: the photo competition can still be decided after the end — oth
   assert.equal(d.pg.results.get('photo')?.places[0]?.pid, 'anna0000');
   assert.equal(d.pg.results.has('bp'), false);
 });
+
+test('captions can be written afterwards — only by the one who took the photo; the latest counts', () => {
+  const room = makeParty();
+  const shot = room.photo('anna0000', 'Først');
+  const key = `anna0000:${shot.entry.id}`;
+  room.add('anna0000', { t: 'pcap', k: key, cap: '  Fra i går  ' });
+  room.add('bo000000', { t: 'pcap', k: key, cap: 'Bos tekst' }); // not his photo
+  assert.equal(at(room, 'cara0000').photoByKey.get(key).cap, 'Fra i går');
+  room.add('anna0000', { t: 'pcap', k: key, cap: '' });
+  assert.equal(at(room, 'cara0000').photoByKey.get(key).cap, '', 'an empty caption takes it off');
+});
