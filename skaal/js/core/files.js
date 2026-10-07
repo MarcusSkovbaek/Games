@@ -60,6 +60,9 @@ export const putFile = (key, value) => run('readwrite', (s) => s.put(value, key)
 export const getFile = (key) => run('readonly', (s) => s.get(key));
 export const deleteFile = (key) => run('readwrite', (s) => s.delete(key));
 
+// Removes every file whose key starts with `prefix`.
+export const deleteFilesFrom = (prefix) => run('readwrite', (s) => s.delete(globalThis.IDBKeyRange.bound(prefix, `${prefix}\uffff`)));
+
 // Reads and rewrites `key` in one go: `change` gets what is stored (undefined if nothing) and
 // returns what to store. Two changes at the same time (say, of a list) can't undo each other.
 export const updateFile = (key, change) =>

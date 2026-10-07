@@ -64,7 +64,8 @@ const offBrokers = (ph, pid, name) =>
   );
 
 // Everything a phone keeps in its own storage — given a moment to go, if it is on its way out.
-async function filesLeft(ph) {
+// (`only`: just the files whose keys match.)
+async function filesLeft(ph, only = /./) {
   let keys = [];
   for (let i = 0; i < 20; i++) {
     keys = await ph.page.evaluate(async () => {
@@ -73,6 +74,7 @@ async function filesLeft(ph) {
       db.close();
       return all;
     });
+    keys = keys.filter((k) => only.test(k));
     if (!keys.length) break;
     await ph.page.waitForTimeout(250);
   }
@@ -91,16 +93,15 @@ async function assertAllListed(ph, what) {
       const keys = await ask(store().getAllKeys());
       const listed = new Set();
       for (const key of keys) {
-        const [kind, roomId] = key.split(':');
-        const names = kind === 'thumbs' || kind === 'photos' || kind === 'avs' ? await ask(store().get(key)) : [];
+        const [kind] = key.split(':');
+        const names = kind === 'thumbs' || kind === 'photos' ? await ask(store().get(key)) : [];
         for (const name of names) {
           if (kind === 'thumbs') listed.add(`thumb:${name}`);
           if (kind === 'photos') listed.add(`photo:${name}`).add(`full:${name}`);
-          if (kind === 'avs') listed.add(`av:${roomId}:${name}`);
         }
       }
       db.close();
-      return keys.filter((key) => /^(thumb|photo|full|av):/.test(key) && !listed.has(key));
+      return keys.filter((key) => /^(thumb|photo|full):/.test(key) && !listed.has(key));
     });
     if (!unlisted.length) return;
     await ph.page.waitForTimeout(250); // (perhaps still being written)
@@ -1371,6 +1372,22 @@ const scenarios = {
     const sheet = await derived(bo, (d) => d.photos.find((ph) => ph.cap === 'Fotoautomaten 📸'));
     assert.ok(sheet.w > 1000 && sheet.w === sheet.h, `one square sheet (${sheet.w}×${sheet.h})`);
 
+    // Bo's phone keeps copies of his photos — until the event falls off his list of events (12 at
+    // most, the latest first): then they leave the phone too.
+    const roll = await derived(bo, (d) => d.photos.filter((ph) => ph.pid === d.me).map((ph) => ph.asset));
+    assert.equal(roll.length, 23);
+    await idbUntil(bo, `full:${roll[0]}`);
+    // (Eleven other events since: then this one is the oldest on the list.)
+    await bo.page.goto(env.appUrl('#/'));
+    await bo.page.waitForSelector('.landing__logo');
+    await bo.page.evaluate(() => {
+      const events = JSON.parse(localStorage.getItem('skaal:events'));
+      const newer = Array.from({ length: 11 }, (_, i) => ({ code: `NYERE${i}`, name: `Fest ${i}`, lastOpened: Date.now() }));
+      localStorage.setItem('skaal:events', JSON.stringify([...newer, ...events]));
+    });
+    await bo.page.goto(env.appUrl('#/e/ZZZZ2222ZZZZ'));
+    const ownCopies = /^(photo|full|thumb|photos|thumbs):/;
+    assert.deepEqual(await filesLeft(bo, ownCopies), [], 'the copies leave with the event');
 
     // Pub golf: the players shoot the photo competition blind, and the judge decides it once the
     // photos have developed — after the round has ended.

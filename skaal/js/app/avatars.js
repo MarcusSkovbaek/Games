@@ -5,8 +5,8 @@
 // Events with old 8-character codes keep the photo in the profile, as before.
 //
 // IndexedDB: `myav:<roomId>:<pv>` our own photo (for healing brokers that lost it),
-// `av:<roomId>:<pid>:<pv>` other people's, listed in `avs:<roomId>`.
-import { getFile, putFile, deleteFile, updateFile } from '../core/files.js';
+// `av:<roomId>:<pid>:<pv>` other people's.
+import { getFile, putFile, deleteFile, deleteFilesFrom } from '../core/files.js';
 import { unsealBytes, digestHex } from '../core/crypto.js';
 
 const TINY = 48; // px of the stand-in in the profile
@@ -150,7 +150,6 @@ export function loadAvatar(player) {
 async function keep(room, pid, pv, sealed) {
   if (room.gone) return;
   try {
-    await updateFile(`avs:${room.roomId}`, (list = []) => [...new Set([...list, `${pid}:${pv}`])]);
     await putFile(`av:${room.roomId}:${pid}:${pv}`, sealed);
   } catch {
     /* no IndexedDB: fetched again next time */
@@ -158,11 +157,11 @@ async function keep(room, pid, pv, sealed) {
 }
 
 // Leaving or deleting an event removes the profile photos this phone kept for it.
-export async function forgetAvatars(roomId, pvs = []) {
+export async function forgetAvatars(roomId) {
   try {
-    for (const key of (await getFile(`avs:${roomId}`)) || []) await deleteFile(`av:${roomId}:${key}`);
-    await deleteFile(`avs:${roomId}`);
-    for (const pv of pvs) if (pv) await deleteFile(`myav:${roomId}:${pv}`);
+    await deleteFilesFrom(`av:${roomId}:`);
+    await deleteFilesFrom(`myav:${roomId}:`);
+    await deleteFile(`avs:${roomId}`); // (the list earlier versions kept)
   } catch {
     /* nothing kept */
   }

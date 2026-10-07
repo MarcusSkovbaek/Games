@@ -27,7 +27,9 @@ export function rememberEvent(code, patch) {
   if (i >= 0) list.splice(i, 1);
   list.unshift(next);
   storage.save('events', list.slice(0, 12));
-  for (const old of list.slice(12)) forgetKeys(old.code);
+  // An event that falls off the list leaves the phone too (open it again by its code, and the
+  // phone fetches what it needs).
+  for (const old of list.slice(12)) forgetData(old);
   return next;
 }
 
@@ -38,9 +40,14 @@ export function forgetEvent(room) {
     'events',
     recentEvents().filter((e) => e.code !== room.code),
   );
-  forgetKeys(room.code);
-  forgetPhotos(room.roomId);
-  forgetAvatars(room.roomId, [room.me?.profile?.pv]);
+  forgetData(room);
+}
+
+function forgetData({ code, roomId }) {
+  forgetKeys(code);
+  if (!roomId) return; // (events listed by earlier versions don't say)
+  forgetPhotos(roomId);
+  forgetAvatars(roomId);
 }
 
 // An event's keys take a deliberately slow derivation (see core/crypto.js). The phone keeps what
@@ -82,7 +89,7 @@ export async function openEvent(code) {
     const { roomId, key, strong } = await roomKeys(code);
     let pid = pidFor(code);
     if (!pid) pid = randomId(12);
-    rememberEvent(code, { pid });
+    rememberEvent(code, { pid, roomId });
     const room = new Room({ code, roomId, key, pid, strong, brokers: resolveBrokers() });
     const off = [
       room.on('change', (version) => {
