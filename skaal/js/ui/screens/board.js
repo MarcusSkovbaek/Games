@@ -71,15 +71,20 @@ function Podium({ d, spots, metric, fmt }) {
   </div>`;
 }
 
-// Rows animate to their new position when the order changes (FLIP).
+// Rows animate to their new position when the order changes (FLIP). Positions are measured within
+// the list — only when the order changes, not on every tick of the clock — so something appearing
+// above it (the podium) doesn't set the rows moving.
 function BoardList({ d, rows, metric, fmt }) {
+  const list = useRef(null);
   const refs = useRef(new Map());
   const prev = useRef(new Map());
+  const order = rows.map((p) => p.pid).join(' ');
   useLayoutEffect(() => {
+    const base = list.current?.getBoundingClientRect().top || 0;
     const next = new Map();
     for (const [pid, el] of refs.current) {
       if (!el) continue;
-      const top = el.getBoundingClientRect().top + window.scrollY;
+      const top = el.getBoundingClientRect().top - base;
       next.set(pid, top);
       const before = prev.current.get(pid);
       if (before != null && Math.abs(before - top) > 2) {
@@ -92,9 +97,9 @@ function BoardList({ d, rows, metric, fmt }) {
       }
     }
     prev.current = next;
-  });
+  }, [order]);
 
-  return html`<div class="board">
+  return html`<div class="board" ref=${list}>
     ${rows.map((p, i) => {
       const value = metric.get(p);
       const moved = metric.value === 'points' && p.prevRank ? p.prevRank - p.rank : 0;
