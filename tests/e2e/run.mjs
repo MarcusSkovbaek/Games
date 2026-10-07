@@ -82,6 +82,9 @@ async function filesLeft(ph, only = /./) {
   return keys;
 }
 
+// What a phone remembers of an event in localStorage (keys that end in its id).
+const remembered = (ph, roomId) => ph.page.evaluate((id) => Object.keys(localStorage).filter((k) => k.endsWith(`:${id}`)), roomId);
+
 // Files a phone keeps that no list of an event knows about: leaving the event (which removes
 // what its lists name) would leave them behind.
 async function assertAllListed(ph, what) {
@@ -1213,6 +1216,7 @@ const scenarios = {
     // The host deletes the event: gone from the brokers, the phones and the big screen — the
     // copies of photos and profile photos the phones kept too — and off everyone's list of events.
     const left = await derived(bo, (d) => d.photos.map((ph) => [ph.pid, ph.asset]));
+    const roomId = await bo.page.evaluate(() => window.__skaal.session.get().room.roomId);
     await tab(host, 'Mig');
     await host.page.getByRole('button', { name: /Slet eventet/ }).click();
     await host.page.locator('.sheet.is-open .btn-row').getByRole('button', { name: 'Slet alt', exact: true }).click();
@@ -1225,6 +1229,7 @@ const scenarios = {
     await wait(1500); // (the host's phone has closed the event: the others hear of it)
     for (const ph of [host, anna, bo, late, denied, tv]) {
       assert.deepEqual(await filesLeft(ph), [], `nothing of the event is left on ${ph.name}’s phone`);
+      assert.deepEqual(await remembered(ph, roomId), [], `nor in ${ph.name}’s local storage`);
       const events = await ph.page.evaluate(() => JSON.parse(localStorage.getItem('skaal:events') || '[]').map((e) => e.code));
       assert.ok(!events.includes(code), `the event is off ${ph.name}’s list of events`);
     }
@@ -1397,6 +1402,7 @@ const scenarios = {
     // Bo's phone keeps copies of his photos — until the event falls off his list of events (12 at
     // most, the latest first): then they leave the phone too.
     const roll = await derived(bo, (d) => d.photos.filter((ph) => ph.pid === d.me).map((ph) => ph.asset));
+    const partyId = await bo.page.evaluate(() => window.__skaal.session.get().room.roomId);
     assert.equal(roll.length, 23);
     await idbUntil(bo, `full:${roll[0]}`);
     // (Eleven other events since: then this one is the oldest on the list.)
@@ -1410,6 +1416,7 @@ const scenarios = {
     await bo.page.goto(env.appUrl('#/e/ZZZZ2222ZZZZ'));
     const ownCopies = /^(photo|full|thumb|photos|thumbs):/;
     assert.deepEqual(await filesLeft(bo, ownCopies), [], 'the copies leave with the event');
+    assert.deepEqual(await remembered(bo, partyId), [], 'and what the phone remembered of it');
 
     // Pub golf with the disposable camera: the photo competition isn't shot blind — the players
     // upload their entries from the photo album, and everyone sees them at once.
@@ -1513,11 +1520,16 @@ const scenarios = {
     assert.equal(await derived(anna, (d) => d.mePlayer.alcoholic), 4, 'both phones share one player');
 
     await tab(late, 'Mig');
+    const roomId = await late.page.evaluate(() => window.__skaal.session.get().room.roomId);
+    assert.ok((await remembered(late, roomId)).length > 0);
     await late.page.getByRole('button', { name: /Forlad eventet/ }).click();
     await late.page.getByRole('button', { name: 'Forlad', exact: true }).click();
     await late.page.waitForSelector('.landing__logo');
     await wait(1200);
     assert.ok(await derived(host, (d) => d.ranking.find((p) => p.name === 'Late').left), 'leaving syncs');
+    // … and leaves nothing of the event on the phone.
+    assert.deepEqual(await remembered(late, roomId), []);
+    assert.deepEqual(await filesLeft(late), []);
 
     // A photo no server has right now — the server lost it while the phone that took it was away:
     // a placeholder instead of an endless spinner, and the photo by itself once it is put back.
@@ -1554,6 +1566,7 @@ const scenarios = {
     await anna.page.waitForFunction((a) => !window.__skaal.derived().photos.some((ph) => ph.asset === a), nys.asset, { timeout: 8000 });
     await offBrokers(anna, nys.pid, nys.asset);
     assert.deepEqual(await filesLeft(ny), [], 'nothing of the event is left on the phone of a removed player');
+    assert.deepEqual(await remembered(ny, roomId), []);
 
     const ignore = (ph) => ({ ...ph, errors: ph.errors.filter((e) => !e.includes('WebSocket connection')) });
     assertNoErrors([host, anna, late, second, ny].map(ignore));

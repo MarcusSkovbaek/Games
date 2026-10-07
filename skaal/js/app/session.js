@@ -34,8 +34,10 @@ export function rememberEvent(code, patch) {
 }
 
 // Leaving an event — or finding it deleted, or yourself removed from it — takes it off this
-// device: off the list of events, its keys, and the copies of its photos and profile photos.
+// device: off the list of events, its keys, what the phone remembers of it, and the copies of its
+// photos and profile photos.
 export function forgetEvent(room) {
+  room.persist = false; // (closing it doesn't save it again)
   storage.save(
     'events',
     recentEvents().filter((e) => e.code !== room.code),
@@ -46,6 +48,8 @@ export function forgetEvent(room) {
 function forgetData({ code, roomId }) {
   forgetKeys(code);
   if (!roomId) return; // (events listed by earlier versions don't say)
+  // The event as last seen (names, drinks, comments) and what was read and when.
+  for (const key of storage.listKeys()) if (key.endsWith(`:${roomId}`)) storage.remove(key);
   forgetPhotos(roomId);
   forgetAvatars(roomId);
 }
