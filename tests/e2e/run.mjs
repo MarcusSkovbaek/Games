@@ -1266,8 +1266,27 @@ const scenarios = {
     await late.page.waitForSelector('.landing__logo');
     await wait(1200);
     assert.ok(await derived(host, (d) => d.ranking.find((p) => p.name === 'Late').left), 'leaving syncs');
+
+    // A photo no server has right now — the server lost it while the phone that took it was away:
+    // a placeholder instead of an endless spinner, and the photo by itself once it is put back.
+    await takePhoto(host, 'Gemt hos værten');
+    await anna.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Gemt hos værten'), null, { timeout: 8000 });
+    await host.page.waitForFunction(() => window.__skaal.derived().photos.every((ph) => window.__skaal.session.get().room.photoSent(ph.asset)), null, { timeout: 8000 });
+    await host.page.close();
+    env.broker.dropClients();
+    await env.broker.close();
+    env.broker = await startBroker({ port });
+    const ny = await joinEvent(env, code, 'Ny');
+    await tab(ny, 'Feed');
+    await ny.page.locator('.segmented__opt', { hasText: 'Fotos' }).click();
+    await ny.page.waitForSelector('.photo-tile .photo-frame__gone', { timeout: 30000 });
+    const back = await host.context.newPage();
+    await back.goto(env.appUrl(`#/e/${code}`));
+    await back.waitForSelector('.drink-grid', { timeout: 15000 });
+    await ny.page.waitForFunction(() => /blob:/.test(document.querySelector('.photo-tile .photo-frame')?.style.backgroundImage || ''), null, { timeout: 45000 });
+    assert.equal(await ny.page.locator('.photo-frame__gone').count(), 0);
     const ignore = (ph) => ({ ...ph, errors: ph.errors.filter((e) => !e.includes('WebSocket connection')) });
-    assertNoErrors([host, anna, late, second].map(ignore));
+    assertNoErrors([host, anna, late, second, ny].map(ignore));
   },
 
   async 'layout & accessibility: 320px phone, axe scan of every tab'(env) {

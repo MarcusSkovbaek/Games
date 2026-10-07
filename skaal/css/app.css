@@ -8495,3 +8495,8 @@ button.pg-edit__emoji {
   display: grid;
   place-items: center;
 }
+
+.photo-frame__gone {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-3);
+}

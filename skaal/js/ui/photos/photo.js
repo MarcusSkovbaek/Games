@@ -32,23 +32,32 @@ export function PhotoFrame({ src, label, fit = 'cover', class: className, style,
 export const photoLabel = (d, photo) => `Billede fra ${d.players.get(photo.pid)?.name || 'en gæst'}${photo.cap ? `: ${photo.cap}` : ''}`;
 
 // A photo (thumbnail or full size) once it has been fetched — url is null until then, failed
-// says nobody has it right now; `enabled` = false waits.
+// says nobody has it right now; `enabled` = false waits. A photo no broker has comes back when the
+// phone that took it puts it back, so it is tried again now and then (10 s, 20 s … every 2 min).
 function useLoaded(room, photo, enabled, cached, load) {
-  const initial = () => ({ key: photo?.key, url: photo ? cached(photo) : null, failed: false });
+  const initial = () => ({ key: photo?.key, url: photo ? cached(photo) : null, failed: false, tries: 0 });
   const [state, setState] = useState(initial);
   const current = state.key === photo?.key ? state : initial();
   useEffect(() => {
     if (!photo || !enabled || current.url) return undefined;
     let live = true;
-    load(room, photo).then((url) => {
-      if (live) setState({ key: photo.key, url, failed: !url });
-    });
+    const attempt = () =>
+      load(room, photo).then((url) => {
+        if (live) setState({ key: photo.key, url, failed: !url, tries: current.tries + 1 });
+      });
+    let timer = null;
+    if (current.failed) timer = setTimeout(attempt, Math.min(120_000, 10_000 * 2 ** (current.tries - 1)));
+    else attempt();
     return () => {
       live = false;
+      clearTimeout(timer);
     };
-  }, [photo?.key, photo?.thumb, enabled]);
+  }, [photo?.key, photo?.thumb, enabled, current.tries]);
   return current;
 }
+
+// In place of a photo nobody has right now.
+const Gone = () => html`<span class="photo-frame__wait photo-frame__gone" title="Ikke tilgængeligt lige nu"><${Icon} name="cloud-off" size=${20} /></span>`;
 
 export const useFullPhoto = (room, photo, enabled = true) => useLoaded(room, photo, enabled, cachedFull, loadFull);
 export const useThumb = (room, photo, enabled = true) => useLoaded(room, photo, enabled, cachedThumb, loadThumb);
@@ -97,7 +106,7 @@ function useSeen(ref, delay = 350) {
 export function PhotoThumb({ room, photo, class: className, style, label }) {
   const thumb = useThumb(room, photo);
   return html`<${PhotoFrame} src=${thumb.url} class=${className} style=${style} label=${label}>
-    ${!thumb.url && !thumb.failed ? html`<span class="photo-frame__wait"><${Spinner} size=${18} /></span>` : null}
+    ${thumb.url ? null : thumb.failed ? html`<${Gone} />` : html`<span class="photo-frame__wait"><${Spinner} size=${18} /></span>`}
   <//>`;
 }
 
@@ -124,7 +133,7 @@ export function FeedPhoto({ room, d, photo, compact }) {
   const open = () => eventUi.set({ photo: photo.key });
   return html`<button type="button" ref=${ref} class=${cx('feed-photo', compact && 'feed-photo--compact')} style=${{ aspectRatio: compact ? '4 / 3' : String(ratio(photo)) }} onClick=${open} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
     <${PhotoFrame} src=${full.url || thumb.url} class=${cx(!full.url && 'is-thumb', developing(d, photo, thumb.url || full.url))} />
-    ${!thumb.url && !full.url ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
+    ${thumb.url || full.url ? null : thumb.failed ? html`<${Gone} />` : html`<span class="feed-photo__wait"><${Spinner} /></span>`}
     <${Pending} room=${room} photo=${photo} />
   </button>`;
 }
@@ -150,7 +159,7 @@ function SetTile({ room, d, photo, more }) {
     aria-label=${`Åbn ${photoLabel(d, photo)}${more ? ` (og ${more} mere)` : ''}`}
   >
     <${PhotoFrame} src=${thumb.url} class=${developing(d, photo, thumb.url)} />
-    ${!thumb.url ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
+    ${thumb.url ? null : thumb.failed ? html`<${Gone} />` : html`<span class="feed-photo__wait"><${Spinner} /></span>`}
     <${Pending} room=${room} photo=${photo} short />
     ${more ? html`<span class="feed-set__more" aria-hidden="true">+${more}</span>` : null}
   </button>`;
@@ -164,7 +173,7 @@ function PhotoTile({ room, d, photo, badge, scope }) {
   const talk = d.comments.get(photo.key)?.length || 0;
   return html`<button type="button" ref=${ref} class="photo-tile" onClick=${() => eventUi.set({ photo: photo.key, scope })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
     <${PhotoFrame} src=${thumb.url} class=${developing(d, photo, thumb.url)} />
-    ${!thumb.url ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
+    ${thumb.url ? null : thumb.failed ? html`<${Gone} />` : html`<span class="photo-tile__wait"><${Spinner} /></span>`}
     <${Pending} room=${room} photo=${photo} short />
     ${badge?.(photo)}
     <span class="photo-tile__foot" aria-hidden="true">
@@ -396,7 +405,15 @@ export function PhotoViewer({ room, d, extra }) {
       onZoom=${setZoomed}
     >
       ${!full.url && !full.failed ? html`<span class="viewer__loading"><${Spinner} size=${30} /></span>` : null}
-      ${full.failed ? html`<span class="viewer__note">Fuld størrelse er ikke tilgængelig lige nu — du ser en mindre udgave.</span>` : null}
+      ${full.failed
+        ? html`<span class="viewer__note">
+            ${thumb.url
+              ? 'Fuld størrelse er ikke tilgængelig lige nu — du ser en mindre udgave.'
+              : mine
+                ? 'Billedet er ikke tilgængeligt lige nu.'
+                : `Billedet er ikke tilgængeligt lige nu — det kommer, når ${p?.name || 'den, der tog det,'} er online igen.`}
+          </span>`
+        : null}
       ${index > 0 ? html`<button type="button" class="viewer__nav viewer__nav--prev" aria-label="Forrige billede" onClick=${() => go(-1)}><${Icon} name="chevron-left" size=${26} /></button>` : null}
       ${index < photos.length - 1 ? html`<button type="button" class="viewer__nav viewer__nav--next" aria-label="Næste billede" onClick=${() => go(1)}><${Icon} name="chevron-right" size=${26} /></button>` : null}
     <//>
