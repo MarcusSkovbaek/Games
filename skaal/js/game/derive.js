@@ -9,6 +9,7 @@ import { hashString } from '../core/rng.js';
 import { TOUR_FACES, TOUR_ASSETS, faceById } from './tour.js';
 import { derivePubGolf, officialsOf } from './pubgolf.js';
 import { derivePhotos, photoFeedItems } from './photos.js';
+import { hostsOf } from './hosts.js';
 
 // After the end only acknowledgements, reactions, photos, captions, comments — and the podium of
 // the pub golf photo competition (its photos may still be developing, see derivePubGolf) — still
@@ -125,7 +126,8 @@ export function derive(room, t) {
   const roster = [...players.values()]
     .map((p) => ({ pid: p.pid, joinedAt: p.joinedAt, left: p.left, pauses: p.pauses }))
     .sort((a, b) => (a.pid < b.pid ? -1 : 1));
-  const games = buildInstances({ roomId: room.roomId, meta, settings, roster, manual: list('game'), now: t, hostId: meta?.hostId });
+  const { hostAt } = hostsOf(meta);
+  const games = buildInstances({ roomId: room.roomId, meta, settings, roster, manual: list('game'), now: t, hostAt });
   const gameByGid = new Map(games.map((g) => [g.gid, g]));
   for (const inst of games) inst.responses = new Map();
   for (const { pid, e } of list('resp')) {
@@ -413,7 +415,7 @@ export function derive(room, t) {
 
   // Photos from the evening. The host can hide anyone's — in pub golf so can the judge.
   const officials = meta?.type === 'pubgolf' ? officialsOf(meta) : null;
-  const canHide = (pid, ts) => pid === meta?.hostId || !!officials?.officialAt(pid, ts);
+  const canHide = (pid, ts) => hostAt(pid, ts) || !!officials?.officialAt(pid, ts);
   const voidedPhotos = all.filter(({ pid, e }) => e.t === 'photo' && voided.has(`${pid}:${e.id}`));
   const { photos, photoByKey, comments, gone: photosGone, undeveloped, shots } = derivePhotos({ list, assets, canHide, voided: voidedPhotos, t });
   feed.push(...photoFeedItems(photos));

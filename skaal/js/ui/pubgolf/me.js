@@ -15,6 +15,7 @@ import { eventUi } from '../screens/event.js';
 import { ToPar, TeamChip } from './common.js';
 import { TeamPickerSheet } from './teams.js';
 import { PgSettingsSheet } from './setup.js';
+import { HandOverSheet, HandOverItem } from '../screens/handover.js';
 
 export function PgMeTab({ room, d }) {
   const pg = d.pg;
@@ -27,6 +28,7 @@ export function PgMeTab({ room, d }) {
   const [teamOpen, setTeamOpen] = useState(false);
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
+  const [handOver, setHandOver] = useState(false);
   if (!me || !x) return null;
   const judge = d.players.get(pg.judge);
   const canPickTeam = pg.cfg.teams.length && (!pg.cfg.lockTeams || pg.isOfficial) && !d.ended;
@@ -183,6 +185,7 @@ export function PgMeTab({ room, d }) {
                   <span class="list-item__icon"><${Icon} name="flag" size=${18} /></span>
                   <span class="list-item__text"><div class="list-item__title">Afslut runden</div><div class="list-item__sub">Frys stillingen og kår vinderne</div></span>
                 </button>`}
+            <${HandOverItem} onClick=${() => setHandOver(true)} />
             <button type="button" class="list-item list-item--danger" onClick=${remove}>
               <span class="list-item__icon"><${Icon} name="trash" size=${18} /></span>
               <span class="list-item__text"><div class="list-item__title">Slet eventet</div><div class="list-item__sub">Fjerner alle data og billeder permanent</div></span>
@@ -226,6 +229,7 @@ export function PgMeTab({ room, d }) {
     <${TeamPickerSheet} room=${room} d=${d} open=${teamOpen} onClose=${() => setTeamOpen(false)} />
     ${d.isHost ? html`<${JudgeSheet} room=${room} d=${d} open=${judgeOpen} onClose=${() => setJudgeOpen(false)} />` : null}
     ${d.isHost ? html`<${PgSettingsSheet} room=${room} d=${d} open=${settings} onClose=${() => setSettings(false)} />` : null}
+    ${d.isHost ? html`<${HandOverSheet} room=${room} d=${d} open=${handOver} onClose=${() => setHandOver(false)} />` : null}
     <${ConnectionSheet} room=${room} d=${d} open=${connOpen} onClose=${() => setConnOpen(false)} />
   </div>`;
 }

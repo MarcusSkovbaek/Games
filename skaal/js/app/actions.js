@@ -11,6 +11,7 @@ import { drinkById } from '../game/drinks.js';
 import { randomId, randomFloat } from '../core/ids.js';
 import { now } from '../core/clock.js';
 import { normalizePg } from '../game/pubgolf.js';
+import { handOver } from '../game/hosts.js';
 import { shuffle } from '../core/rng.js';
 
 export function logDrink(room, drinkId) {
@@ -98,6 +99,11 @@ export function updateSettings(room, patch) {
 
 export function renameEvent(room, name) {
   room.setMeta({ name: String(name).trim().slice(0, 48) });
+}
+
+// The host hands the role to someone else (see game/hosts.js).
+export function handOverHost(room, pid) {
+  room.setMeta(handOver(room.state.meta, pid, now()));
 }
 
 export function endEvent(room) {

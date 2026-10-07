@@ -33,7 +33,7 @@ function timing(inst, game) {
   return inst;
 }
 
-export function buildInstances({ roomId, meta, settings, roster, manual = [], now, hostId }) {
+export function buildInstances({ roomId, meta, settings, roster, manual = [], now, hostAt = (pid) => pid === meta?.hostId }) {
   if (!meta) return [];
   const raw = [];
   const ended = meta.ended || Infinity;
@@ -82,7 +82,7 @@ export function buildInstances({ roomId, meta, settings, roster, manual = [], no
   for (const { pid, e } of manual) {
     const game = gameById(e.g);
     if (!game || game.manual === false || typeof e.gid !== 'string' || !e.p || typeof e.p !== 'object') continue;
-    if (!settings.anyoneCanStart && pid !== hostId) continue;
+    if (!settings.anyoneCanStart && !hostAt(pid, e.ts)) continue;
     if (e.ts > ended) continue;
     raw.push({ gid: e.gid, g: e.g, start: e.ts, p: e.p, auto: false, by: pid, eligible: eligibleAt(roster, e.ts) });
   }

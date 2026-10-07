@@ -18,6 +18,7 @@ import { PhotosTab, PhotoPlaces } from './photos.js';
 import { PgMeTab } from './me.js';
 import { ChallengeOverlay, CompStartOverlay, PodiumOverlay } from './overlays.js';
 import { holeTitle } from './common.js';
+import { useBecameHost } from '../screens/handover.js';
 
 const TABS = [
   { id: 'course', label: 'Bane', icon: 'flag' },
@@ -36,6 +37,7 @@ export function PgEventApp({ room }) {
   const d = getDerived(room, now());
   const pg = d.pg;
   const [photosSeen, setPhotosSeen] = useState(() => storage.load(`photosSeen:${room.roomId}`, 0));
+  useBecameHost(d, 'Mig');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });

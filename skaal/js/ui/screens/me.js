@@ -13,6 +13,7 @@ import { formatCode } from '../../core/ids.js';
 import { APP } from '../../config.js';
 import { ProfileForm } from './profile.js';
 import { HostSheet } from './host.js';
+import { HandOverSheet, HandOverItem } from './handover.js';
 import { ConnectionSheet } from './connection.js';
 import { session } from '../../app/session.js';
 import { eventUi } from './event.js';
@@ -23,6 +24,7 @@ export function MeTab({ room, d }) {
   const [editing, setEditing] = useState(false);
   const [hostOpen, setHostOpen] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
+  const [handOver, setHandOver] = useState(false);
   const sync = useStore(session, (s) => s.sync);
   const [showAll, setShowAll] = useState(false);
   if (!me) return null;
@@ -185,6 +187,7 @@ export function MeTab({ room, d }) {
                   <span class="list-item__icon"><${Icon} name="flag" size=${18} /></span>
                   <span class="list-item__text"><div class="list-item__title">Afslut eventet</div><div class="list-item__sub">Frys stillingen og kår vinderne</div></span>
                 </button>`}
+            <${HandOverItem} onClick=${() => setHandOver(true)} />
             <button type="button" class="list-item list-item--danger" onClick=${remove}>
               <span class="list-item__icon"><${Icon} name="trash" size=${18} /></span>
               <span class="list-item__text"><div class="list-item__title">Slet eventet</div><div class="list-item__sub">Fjerner alle data permanent</div></span>
@@ -226,6 +229,7 @@ export function MeTab({ room, d }) {
         : null}
     <//>
     ${d.isHost ? html`<${HostSheet} room=${room} d=${d} open=${hostOpen} onClose=${() => setHostOpen(false)} />` : null}
+    ${d.isHost ? html`<${HandOverSheet} room=${room} d=${d} open=${handOver} onClose=${() => setHandOver(false)} />` : null}
     <${ConnectionSheet} room=${room} d=${d} open=${connOpen} onClose=${() => setConnOpen(false)} />
   </div>`;
 }

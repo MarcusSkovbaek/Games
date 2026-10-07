@@ -21,6 +21,8 @@
 // Officials are the host and the judge. The host appoints the judge (meta.judges keeps every
 // appointment with its time); a judge's entries count for the time they were judge.
 
+import { hostsOf } from './hosts.js';
+
 export const PG = {
   defaultHoles: 9,
   maxHoles: 18,
@@ -165,18 +167,18 @@ export function normalizePg(raw) {
   };
 }
 
-// The judge right now, and whether an entry made by pid at ts counts as official: the host's
-// always do, a judge's only while they were judge. There is only ever one judge — the host until
-// someone else is appointed.
+// The judge right now, and whether an entry made by pid at ts counts as official: the host's do
+// (while they were host, see game/hosts.js), a judge's while they were judge. There is only ever
+// one judge — the host until someone else is appointed.
 export function officialsOf(meta) {
-  const hostId = typeof meta?.hostId === 'string' ? meta.hostId : '';
+  const { hostId, hostAt } = hostsOf(meta);
   const terms = (Array.isArray(meta?.judges) ? meta.judges : [])
     .filter((x) => x && typeof x.p === 'string')
     .map((x) => ({ p: x.p, from: Number(x.ts) || 0 }))
     .sort((a, b) => a.from - b.from);
   terms.forEach((x, i) => (x.to = i + 1 < terms.length ? terms[i + 1].from : Infinity));
   const judge = terms.length ? terms[terms.length - 1].p : hostId;
-  const officialAt = (pid, ts) => !!pid && (pid === hostId || terms.some((x) => x.p === pid && ts >= x.from - PG.judgeSkewMs && ts < x.to));
+  const officialAt = (pid, ts) => !!pid && (hostAt(pid, ts) || terms.some((x) => x.p === pid && ts >= x.from - PG.judgeSkewMs && ts < x.to));
   return { judge, hostId, officialAt };
 }
 

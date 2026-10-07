@@ -24,6 +24,7 @@ import { PgEventApp } from '../pubgolf/app.js';
 import { PhotoLayer, CameraButton } from '../photos/layer.js';
 import { restorePhotos } from '../../app/photos.js';
 import { stopTourSong } from '../tourSong.js';
+import { useBecameHost } from './handover.js';
 
 // UI state that should survive switching tabs.
 export const eventUi = createStore({ tab: 'home', invite: false, player: null, spin: null, breakerHidden: {}, tour: null, toast: null, camera: false, photo: null, show: false, comments: false, scope: null, feedView: 'all', photosBy: null });
@@ -106,6 +107,7 @@ function EventApp({ room }) {
   const ui = useStore(eventUi);
   const d = getDerived(room, now());
   const [feedSeen, setFeedSeen] = useState(() => storage.load(`feedSeen:${room.roomId}`, 0));
+  useBecameHost(d, 'Mig');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });

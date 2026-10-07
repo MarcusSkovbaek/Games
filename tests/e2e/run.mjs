@@ -322,6 +322,24 @@ const scenarios = {
     await anna.page.waitForSelector('.final-hero', { timeout: 8000 });
     await shot(anna.page, 'e2e-final');
     assert.ok(await anna.page.locator('.award').count(), 'awards are shown');
+
+    // Mads goes home and hands the host role to Anna: she gets the host's controls, and he can
+    // leave.
+    await host.page.getByRole('button', { name: 'Se hele stillingen' }).click();
+    await tab(host, 'Mig');
+    await host.page.getByRole('button', { name: /Overdrag værtsrollen/ }).click();
+    const axeSource = readFileSync(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8');
+    assert.deepEqual(await axeViolations(host.page, axeSource), [], 'handing over is accessible');
+    await shot(host.page, 'e2e-handover');
+    await host.page.locator('.sheet.is-open .list-item', { hasText: 'Anna B' }).click();
+    await host.page.getByRole('button', { name: 'Gør til vært' }).click();
+    await anna.page.waitForSelector('.toast:has-text("Du er nu vært")', { timeout: 8000 });
+    assert.equal(await derived(bo, (d) => d.players.get(d.meta.hostId).name), 'Anna B');
+    await anna.page.getByRole('button', { name: 'Se hele stillingen' }).click();
+    await tab(anna, 'Mig');
+    assert.equal(await anna.page.getByRole('button', { name: /Genåbn eventet/ }).count(), 1, 'the new host has the controls');
+    assert.equal(await host.page.getByRole('button', { name: /Genåbn eventet/ }).count(), 0);
+    assert.equal(await host.page.getByRole('button', { name: /Forlad eventet/ }).count(), 1, 'and the former host can leave');
     assertNoErrors(all.concat(tv));
   },
 

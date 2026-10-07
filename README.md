@@ -90,6 +90,9 @@ Appen ligger i [`skaal/`](skaal/) og er en ren statisk side — ingen server, in
   "Skål — drukket ✓". Et skjold kan bruges til at slippe, og "Senere" gemmer dem på Drik-fanen.
 - **Feed med reaktioner**, **storskærm** (`#/tv/<kode>`) til tv'et, **slutresultat** med podie og
   priser, **pause-tilstand**, lyd og vibration, og installérbar som app (PWA).
+- **Overdrag værtsrollen** — går værten tidligt hjem, giver *Mig → Overdrag værtsrollen* en anden
+  værtens rettigheder (og værten kan derefter forlade eventet). Det, den tidligere vært gjorde som
+  vært — skjulte billeder, startede minigames, afgjorde konkurrencer — gælder stadig.
 - **Ansvarlig** — vand tæller med, pause tager dig ud af minigames, og alle straffe er frivillige.
 
 ## Kom i gang (GitHub Pages)
