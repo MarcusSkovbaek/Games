@@ -194,6 +194,19 @@ export function toneWav(seconds = 30, rate = 8000) {
 }
 
 export async function axeViolations(page, axeSource) {
+  // Colours are judged as they look once things have come in: let short entrance animations (a
+  // pop-up fading in) finish first — not the endless ones, nor a slideshow's progress bar.
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime <= 1500)
+          .map((a) => a.finished.catch(() => {})),
+      ),
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]),
+  );
   await page.addScriptTag({ content: axeSource });
   return page.evaluate(async () =>
     (await window.axe.run(document, { resultTypes: ['violations'] })).violations
