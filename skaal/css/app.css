@@ -7868,6 +7868,23 @@ button.pg-edit__emoji {
   padding-left: 16px;
 }
 
+/* A photo from the disposable camera that has just developed: up out of the dark */
+.photo-frame.is-developing {
+  animation: develop 2.6s ease-out both;
+}
+
+@keyframes develop {
+  from {
+    filter: brightness(0.15) sepia(1) contrast(0.7) blur(3px);
+  }
+  55% {
+    filter: brightness(0.75) sepia(0.45) contrast(0.9) blur(0);
+  }
+  to {
+    filter: none;
+  }
+}
+
 /* Full-screen viewer */
 .viewer {
   position: fixed;
@@ -8352,6 +8369,12 @@ button.pg-edit__emoji {
   to {
     transform: scale(1.06);
   }
+}
+
+.tv-photo__img.is-developing {
+  animation:
+    develop 2.6s ease-out both,
+    ken-burns 9s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {

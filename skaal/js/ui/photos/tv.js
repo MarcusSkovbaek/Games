@@ -2,15 +2,15 @@
 // turn — full size, on a blurred copy of itself so portrait photos fill the frame nicely. Each
 // photo fades in over the last one and drifts slowly closer. Before the first photo: a nudge to
 // take one.
-import { html, useState, useEffect, useRef, Avatar } from '../kit.js';
-import { PhotoFrame, useFullPhoto, useThumb, photoLabel } from './photo.js';
+import { html, useState, useEffect, useRef, Avatar, cx } from '../kit.js';
+import { PhotoFrame, useFullPhoto, useThumb, photoLabel, developing } from './photo.js';
 import { canTakePhotos } from './layer.js';
 import { fmtWhen } from '../format.js';
 
-function Layer({ src, label, top }) {
+function Layer({ src, label, top, develop }) {
   return html`<div class=${top ? 'tv-photo__layer is-top' : 'tv-photo__layer'}>
     <${PhotoFrame} src=${src} class="tv-photo__backdrop" />
-    <${PhotoFrame} src=${src} fit="contain" label=${label} class="tv-photo__img" />
+    <${PhotoFrame} src=${src} fit="contain" label=${label} class=${cx('tv-photo__img', develop)} />
   </div>`;
 }
 
@@ -53,7 +53,7 @@ export function TvPhotos({ room, d }) {
   const said = talk?.[talk.length - 1];
   return html`<figure class="card tv-photo">
     ${under ? html`<${Layer} key=${under.key} src=${under.src} />` : null}
-    <${Layer} key=${photo.key} src=${src} label=${photoLabel(d, photo)} top />
+    <${Layer} key=${photo.key} src=${src} label=${photoLabel(d, photo)} develop=${developing(d, photo, src)} top />
     <figcaption class="tv-photo__cap" key=${`cap-${photo.key}`}>
       <${Avatar} player=${p} size=${30} />
       <span class="tv-photo__text">

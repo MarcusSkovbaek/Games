@@ -103,6 +103,11 @@ export function PhotoThumb({ room, photo, class: className, style, label }) {
 
 const ratio = (photo) => (photo.w && photo.h ? Math.min(1.8, Math.max(0.75, photo.w / photo.h)) : 1);
 
+// A photo from the disposable camera that has only just developed comes up out of the dark, like a
+// print in the developer (once its picture is there).
+const DEVELOPING_MS = 15 * 60_000;
+export const developing = (d, photo, src) => !!src && photo.ds && d.t - photo.shown < DEVELOPING_MS && 'is-developing';
+
 // A photo in the feed: the thumbnail at once, sharpened to full size when it has been looked at.
 // Our own photo, while no broker has it yet (no connection): it goes out by itself later.
 function Pending({ room, photo, short }) {
@@ -118,7 +123,7 @@ export function FeedPhoto({ room, d, photo, compact }) {
   const full = useFullPhoto(room, photo, seen && !compact);
   const open = () => eventUi.set({ photo: photo.key });
   return html`<button type="button" ref=${ref} class=${cx('feed-photo', compact && 'feed-photo--compact')} style=${{ aspectRatio: compact ? '4 / 3' : String(ratio(photo)) }} onClick=${open} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
-    <${PhotoFrame} src=${full.url || thumb.url} class=${cx(!full.url && 'is-thumb')} />
+    <${PhotoFrame} src=${full.url || thumb.url} class=${cx(!full.url && 'is-thumb', developing(d, photo, thumb.url || full.url))} />
     ${!thumb.url && !full.url ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} />
   </button>`;
@@ -144,7 +149,7 @@ function SetTile({ room, d, photo, more }) {
     onContextMenu=${block}
     aria-label=${`Åbn ${photoLabel(d, photo)}${more ? ` (og ${more} mere)` : ''}`}
   >
-    <${PhotoFrame} src=${thumb.url} />
+    <${PhotoFrame} src=${thumb.url} class=${developing(d, photo, thumb.url)} />
     ${!thumb.url ? html`<span class="feed-photo__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} short />
     ${more ? html`<span class="feed-set__more" aria-hidden="true">+${more}</span>` : null}
@@ -158,7 +163,7 @@ function PhotoTile({ room, d, photo, badge, scope }) {
   const likes = likesOf(d, photo.key);
   const talk = d.comments.get(photo.key)?.length || 0;
   return html`<button type="button" ref=${ref} class="photo-tile" onClick=${() => eventUi.set({ photo: photo.key, scope })} onContextMenu=${block} aria-label=${`Åbn ${photoLabel(d, photo)}`}>
-    <${PhotoFrame} src=${thumb.url} />
+    <${PhotoFrame} src=${thumb.url} class=${developing(d, photo, thumb.url)} />
     ${!thumb.url ? html`<span class="photo-tile__wait"><${Spinner} /></span>` : null}
     <${Pending} room=${room} photo=${photo} short />
     ${badge?.(photo)}
@@ -380,7 +385,16 @@ export function PhotoViewer({ room, d, extra }) {
       ${photos.length > 1 ? html`<${IconButton} icon=${show ? 'pause' : 'play'} label=${show ? 'Sæt på pause' : 'Afspil billederne'} onClick=${play} />` : null}
       <${IconButton} icon="x" label="Luk" onClick=${close} data-autofocus />
     </header>
-    <${ZoomStage} photoKey=${photo.key} src=${full.url || thumb.url} label=${photoLabel(d, photo)} onStep=${go} onClose=${close} onHold=${setHeld} onZoom=${setZoomed}>
+    <${ZoomStage}
+      photoKey=${photo.key}
+      src=${full.url || thumb.url}
+      label=${photoLabel(d, photo)}
+      develop=${developing(d, photo, full.url || thumb.url)}
+      onStep=${go}
+      onClose=${close}
+      onHold=${setHeld}
+      onZoom=${setZoomed}
+    >
       ${!full.url && !full.failed ? html`<span class="viewer__loading"><${Spinner} size=${30} /></span>` : null}
       ${full.failed ? html`<span class="viewer__note">Fuld størrelse er ikke tilgængelig lige nu — du ser en mindre udgave.</span>` : null}
       ${index > 0 ? html`<button type="button" class="viewer__nav viewer__nav--prev" aria-label="Forrige billede" onClick=${() => go(-1)}><${Icon} name="chevron-left" size=${26} /></button>` : null}
@@ -464,7 +478,7 @@ const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 // The photo in the viewer: swipe for the next one, double-tap or pinch to zoom, drag to look
 // around while zoomed (on a computer: double-click, ctrl/⌘ + scroll, or + / − / 0).
-function ZoomStage({ photoKey, src, label, onStep, onClose, onHold, onZoom, children }) {
+function ZoomStage({ photoKey, src, label, develop, onStep, onClose, onHold, onZoom, children }) {
   const [view, setView] = useState(RESET);
   const stage = useRef(null);
   const pointers = useRef(new Map());
@@ -598,7 +612,7 @@ function ZoomStage({ photoKey, src, label, onStep, onClose, onHold, onZoom, chil
       src=${src}
       fit="contain"
       label=${label}
-      class="viewer__photo"
+      class=${cx('viewer__photo', develop)}
       style=${{ transform: `translate(${view.x + view.dx}px, ${view.y}px) scale(${view.s})`, transition: view.live ? 'none' : 'transform 0.25s var(--ease)' }}
     />
     ${children}

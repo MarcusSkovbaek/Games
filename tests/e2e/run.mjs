@@ -1132,6 +1132,7 @@ const scenarios = {
     await anna.page.waitForSelector('.toast:has-text("fra Bo er fremkaldt")', { timeout: 8000 });
     assert.equal(await anna.page.locator('.develop-card').count(), 0);
     assert.match(await anna.page.locator('.feed-item').first().textContent(), /Bo fik fremkaldt 11 billeder fra engangskameraet \(taget i går kl\. \d\d:\d\d\)/);
+    await anna.page.waitForSelector('.feed-set .photo-frame.is-developing', { timeout: 8000 }); // up out of the dark
     await anna.page.locator('.feed-item', { hasText: 'Du fik fremkaldt et billede' }).locator('.feed-photo').click();
     await anna.page.waitForSelector('.viewer');
     assert.match(await anna.page.locator('.viewer__who small').textContent(), /🎞️ taget i går kl\./);
