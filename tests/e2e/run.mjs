@@ -1223,7 +1223,14 @@ const scenarios = {
     const second = await env.phone('anna-2');
     await second.page.goto(env.appUrl(`#/e/${code}`));
     await second.page.getByRole('button', { name: /Fortsæt som dig selv/ }).click();
-    await second.page.locator('.sheet.is-open .list-item', { hasText: 'Anna' }).click();
+    // Not by a slip of the finger: her first phone is online right now — the list says so — and
+    // she confirms it's her.
+    const annaItem = second.page.locator('.sheet.is-open .list-item', { hasText: 'Anna' });
+    await annaItem.filter({ hasText: 'online nu' }).waitFor({ timeout: 8000 });
+    await annaItem.click();
+    assert.match(await second.page.getByRole('dialog', { name: 'Fortsæt som Anna?' }).textContent(), /Anna er online på en anden telefon lige nu/);
+    await shot(second.page, 'e2e-claim-confirm');
+    await second.page.getByRole('button', { name: 'Ja, jeg er Anna' }).click();
     await second.page.waitForSelector('.drink-grid', { timeout: 15000 });
     assert.equal(await pidOf(second), annaPid);
     await logDrink(second, 'Øl', 1);

@@ -9,6 +9,7 @@ import { pickPlayerColor } from '../../game/derive.js';
 import { setTeam } from '../../app/actions.js';
 import { saveProfile } from '../../app/avatars.js';
 import { TeamChip } from '../pubgolf/common.js';
+import { confirmDialog } from '../ui-store.js';
 
 // Step 1: type the code.
 export function JoinCode({ initial }) {
@@ -77,11 +78,18 @@ export function JoinProfile({ room, d }) {
     rememberEvent(room.code, { name: meta.name, host: isHost, type: meta.type || 'party' });
   };
 
-  const claim = async (pid) => {
+  // Taking over a player is for continuing on a new phone — so not by a slip of the finger.
+  const claim = async (p) => {
+    const ok = await confirmDialog({
+      title: `Fortsæt som ${p.name}?`,
+      text: `${p.online ? `${p.name} er online på en anden telefon lige nu. ` : ''}Kun hvis det er dig: Så fortsætter du som ${p.name} på denne telefon${p.isHost ? ' — også som vært' : ''}.`,
+      confirm: `Ja, jeg er ${p.name}`,
+    });
+    if (!ok) return;
     setClaimOpen(false);
     const code = room.code;
     closeEvent();
-    rememberEvent(code, { pid });
+    rememberEvent(code, { pid: p.pid });
     await openEvent(code);
   };
 
@@ -120,11 +128,13 @@ export function JoinProfile({ room, d }) {
     <${Sheet} open=${claimOpen} onClose=${() => setClaimOpen(false)} title="Hvem er du?" subtitle="Fortsæt med din stilling fra en anden telefon.">
       <div class="list">
         ${players.map(
-          (p) => html`<button type="button" class="list-item" onClick=${() => claim(p.pid)}>
+          (p) => html`<button type="button" class="list-item" onClick=${() => claim(p)}>
             <${Avatar} player=${p} size=${40} />
             <span class="list-item__text">
-              <span class="list-item__title">${p.name}</span>
-              <span class="list-item__sub">${pg ? `${pg.players.get(p.pid)?.played || 0} huller spillet` : `${fmtPoints(p.points)} point · ${plural(p.alcoholic, 'drink', 'drinks')}`}</span>
+              <span class="list-item__title">${p.name}${p.isHost ? ' 👑' : ''}</span>
+              <span class="list-item__sub">
+                ${pg ? `${pg.players.get(p.pid)?.played || 0} huller spillet` : `${fmtPoints(p.points)} point · ${plural(p.alcoholic, 'drink', 'drinks')}`}${p.online ? ' · online nu' : ''}
+              </span>
             </span>
             <${Icon} name="chevron-right" size=${18} />
           </button>`,
