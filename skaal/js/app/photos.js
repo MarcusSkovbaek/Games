@@ -81,6 +81,28 @@ export async function preparePhoto(source, { mirror = false, zoom = 1 } = {}) {
   return { full, thumb, ...size };
 }
 
+// The photo booth (see ui/photos/camera.js): a square from the middle of the camera picture, and
+// four of them on one sheet, two by two, on a white frame like a strip from a photo booth.
+export function grabSquare(source, { mirror = false, zoom = 1, edge = 720 } = {}) {
+  const sw = source.videoWidth || source.width;
+  const sh = source.videoHeight || source.height;
+  const side = Math.round(Math.min(sw, sh) / Math.min(4, Math.max(1, zoom || 1)));
+  return canvasFor(source, { x: Math.round((sw - side) / 2), y: Math.round((sh - side) / 2), w: side, h: side }, edge, mirror);
+}
+
+export function boothSheet(frames) {
+  const cell = Math.min(...frames.map((f) => f.width));
+  const gap = Math.round(cell * 0.04);
+  const pad = Math.round(cell * 0.07);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = pad * 2 + cell * 2 + gap;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fbf8f1';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  frames.slice(0, 4).forEach((f, i) => ctx.drawImage(f, pad + (i % 2) * (cell + gap), pad + Math.floor(i / 2) * (cell + gap), cell, cell));
+  return canvas;
+}
+
 // A picture picked from the phone (camera roll), turned right way up.
 export async function bitmapFromFile(file) {
   if (globalThis.createImageBitmap) {

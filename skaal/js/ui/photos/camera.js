@@ -1,9 +1,10 @@
 // The camera, right in the app: a live viewfinder, front/back camera, flash, zoom, self-timer, and
-// a look at the picture before it is shared. Photos taken here never land in the phone's camera
-// roll — they only exist inside the event. Where the browser can't open the camera directly, the
-// phone's own camera (or the camera roll) is used instead.
+// a look at the picture before it is shared — or the photo booth, four shots in a row on one sheet.
+// Photos taken here never land in the phone's camera roll — they only exist inside the event.
+// Where the browser can't open the camera directly, the phone's own camera (or the camera roll) is
+// used instead.
 import { html, useState, useEffect, useLayoutEffect, useRef, useModalFocus, Icon, IconButton, Button, Spinner, cx } from '../kit.js';
-import { preparePhoto, bitmapFromFile, sharePhoto, PHOTO } from '../../app/photos.js';
+import { preparePhoto, bitmapFromFile, sharePhoto, grabSquare, boothSheet, PHOTO } from '../../app/photos.js';
 import { eventUi } from '../screens/event.js';
 import { toast } from '../ui-store.js';
 import { sfx, haptic } from '../feedback.js';
@@ -16,6 +17,9 @@ const MAX_PICK = 10;
 // gets too blurry.
 const DIGITAL_MAX = 3;
 const zoomText = (z) => `${String(Math.round(z * 10) / 10).replace('.', ',')}×`;
+// The photo booth: four shots, 3 seconds to get ready for the first and 2 between the others.
+const BOOTH = { shots: 4, first: 3, next: 2 };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function Camera({ room, onClose }) {
   const root = useRef(null);
@@ -31,6 +35,10 @@ export function Camera({ room, onClose }) {
   const [busy, setBusy] = useState(false);
   const [blink, setBlink] = useState(0);
   const [last, setLast] = useState(null);
+  const [booth, setBooth] = useState(false); // photo booth mode
+  const [run, setRun] = useState(null); // the photo booth while it shoots: { shot, count }
+  const stopRun = useRef(false);
+  useEffect(() => () => (stopRun.current = true), []);
   // Zoom: the camera's own where it has one ({ min, max }), otherwise by cropping the picture.
   const [zoom, setZoom] = useState(1);
   const [lens, setLens] = useState(null);
@@ -163,6 +171,52 @@ export function Camera({ room, onClose }) {
     }
   };
 
+  // The photo booth: a countdown before each of the four shots (pressing again stops it), then the
+  // sheet to look at like any photo.
+  const runBooth = async () => {
+    if (run) {
+      stopRun.current = true;
+      return;
+    }
+    const v = video.current;
+    if (!v || status !== 'live' || !v.videoWidth) return;
+    stopRun.current = false;
+    const frames = [];
+    for (let i = 0; i < BOOTH.shots; i++) {
+      for (let c = i ? BOOTH.next : BOOTH.first; c > 0; c--) {
+        setRun({ shot: i + 1, count: c });
+        sfx.tick();
+        await sleep(1000);
+        if (stopRun.current) {
+          setRun(null);
+          setLit(false);
+          return;
+        }
+      }
+      setRun({ shot: i + 1, count: 0 });
+      if (!v.videoWidth) {
+        setRun(null); // the camera went away (the app went to the background)
+        return;
+      }
+      if (flash && facing === 'user') {
+        setLit(true);
+        await sleep(280); // let the camera adjust to the light
+      }
+      sfx.shutter();
+      haptic(20);
+      frames.push(grabSquare(v, { mirror: facing === 'user', zoom: lens ? 1 : zoom }));
+      setLit(false);
+      setBlink((b) => b + 1);
+    }
+    setRun(null);
+    setBusy(true);
+    try {
+      review(await preparePhoto(boothSheet(frames)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // A picture from the phone, ready to share (the decoded original is let go of at once).
   const prepareFile = async (file) => {
     const picture = await bitmapFromFile(file);
@@ -276,7 +330,7 @@ export function Camera({ room, onClose }) {
     ${status === 'live' && !reviewing ? html`<div class="camera__finder" aria-hidden="true" ...${finger}></div>` : null}
     ${blink ? html`<div class="camera__blink" key=${blink} aria-hidden="true"></div>` : null}
     ${lit ? html`<div class="camera__lit" aria-hidden="true"></div>` : null}
-    <${Countdown} count=${selfTimer.count} />
+    <${Countdown} count=${selfTimer.count || run?.count} />
 
     <header class="camera__top">
       <${IconButton} icon="x" label="Luk kameraet" onClick=${onClose} />
@@ -286,8 +340,8 @@ export function Camera({ room, onClose }) {
             ${torch.can || facing === 'user'
               ? html`<${FlashTool} on=${torch.can ? torch.on : flash} onClick=${() => (torch.can ? toggleTorch() : setFlash(!flash))} />`
               : null}
-            <${TimerTool} timer=${selfTimer.timer} onClick=${selfTimer.next} />
-            <${FlipTool} facing=${facing} onClick=${flip} />`
+            ${booth ? null : html`<${TimerTool} timer=${selfTimer.timer} onClick=${selfTimer.next} />`}
+            ${run ? null : html`<${FlipTool} facing=${facing} onClick=${flip} />`}`
         : null}
     </header>
 
@@ -310,19 +364,25 @@ export function Camera({ room, onClose }) {
                   ${zoomText(zoom)}
                 </button>`
               : null}
+            ${run
+              ? html`<p class="camera__booth-step" aria-live="polite">Billede ${run.shot} af ${BOOTH.shots}</p>`
+              : html`<div class="camera__modes" role="group" aria-label="Slags billede">
+                  <button type="button" class=${cx('camera__mode', !booth && 'is-on')} aria-pressed=${!booth} onClick=${() => setBooth(false)}>Foto</button>
+                  <button type="button" class=${cx('camera__mode', booth && 'is-on')} aria-pressed=${booth} onClick=${() => setBooth(true)}>Fotoautomat</button>
+                </div>`}
             <div class="camera__controls">
-              ${filePicker('', 'image', { name: 'Vælg fra kamerarullen' })}
+              ${run ? html`<span class="camera__last is-empty"></span>` : filePicker('', 'image', { name: 'Vælg fra kamerarullen' })}
               <button
                 type="button"
                 data-autofocus
-                class=${cx('camera__shutter', selfTimer.count && 'is-counting')}
-                aria-label=${selfTimer.count ? 'Stop selvudløseren' : 'Tag billede'}
-                onClick=${() => selfTimer.press(capture)}
+                class=${cx('camera__shutter', (selfTimer.count || run) && 'is-counting')}
+                aria-label=${run ? 'Stop fotoautomaten' : booth ? 'Start fotoautomaten' : selfTimer.count ? 'Stop selvudløseren' : 'Tag billede'}
+                onClick=${() => (booth ? runBooth() : selfTimer.press(capture))}
                 disabled=${status !== 'live' || busy}
               >
                 <span></span>
               </button>
-              ${last
+              ${last && !run
                 ? html`<button type="button" class="camera__last" aria-label="Se det sidste billede" onClick=${() => eventUi.set({ camera: false, photo: last.key })}>
                     <${PhotoFrame} src=${last.url} />
                   </button>`

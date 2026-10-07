@@ -7414,6 +7414,39 @@ button.pg-edit__emoji {
   color: rgba(255, 255, 255, 0.8);
 }
 
+/* Foto | Fotoautomat */
+.camera__modes {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.camera__mode {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.camera__mode.is-on {
+  background: #fff;
+  color: #111;
+}
+
+.camera__booth-step {
+  margin-bottom: 14px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .camera__controls {
   display: flex;
   align-items: center;

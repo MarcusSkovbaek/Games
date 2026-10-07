@@ -1180,6 +1180,25 @@ const scenarios = {
     await takePhoto(anna, 'Morgenkaffe');
     for (const ph of all) await ph.page.waitForFunction(() => window.__skaal.derived().photos.length === 25, null, { timeout: 8000 });
 
+    // The photo booth: four shots in a row, each after a countdown, on one square sheet.
+    await anna.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+    await anna.page.waitForSelector('.camera__video.is-on', { timeout: 10000 });
+    await anna.page.getByRole('button', { name: 'Fotoautomat', exact: true }).click();
+    await anna.page.getByRole('button', { name: 'Start fotoautomaten' }).click();
+    await anna.page.waitForSelector('.camera__booth-step', { timeout: 3000 });
+    assert.match(await anna.page.locator('.camera__booth-step').textContent(), /Billede 1 af 4/);
+    assert.deepEqual(await axeViolations(anna.page, axeSource), [], 'the photo booth is accessible');
+    await shot(anna.page, 'e2e-booth-countdown');
+    await anna.page.waitForSelector('.camera__review', { timeout: 25000 });
+    await shot(anna.page, 'e2e-booth-sheet');
+    await anna.page.fill('.camera__form input', 'Fotoautomaten 📸');
+    await anna.page.getByRole('button', { name: 'Del med alle' }).click();
+    await anna.page.waitForSelector('.camera__review', { state: 'detached', timeout: 10000 });
+    await anna.page.getByRole('button', { name: 'Luk kameraet' }).click();
+    await bo.page.waitForFunction(() => window.__skaal.derived().photos.some((ph) => ph.cap === 'Fotoautomaten 📸'), null, { timeout: 8000 });
+    const sheet = await derived(bo, (d) => d.photos.find((ph) => ph.cap === 'Fotoautomaten 📸'));
+    assert.ok(sheet.w > 1000 && sheet.w === sheet.h, `one square sheet (${sheet.w}×${sheet.h})`);
+
     // Pub golf: the players shoot the photo competition blind, and the judge decides it once the
     // photos have developed — after the round has ended.
     const { ph: ida, code: golf } = await createPubGolf(env, { host: 'Ida', team: 'Hold Blå', disposable: true });
