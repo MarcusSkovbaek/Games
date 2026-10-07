@@ -10,6 +10,7 @@ import { sips } from '../format.js';
 import { GAMEPLAY } from '../../config.js';
 import { markInboxSeen } from './inbox.js';
 import { eventUi } from './event.js';
+import { useHeld } from '../covered.js';
 
 const STEP_MS = 750;
 
@@ -24,7 +25,15 @@ export function GroupToastOverlay({ room, d, tv = false }) {
   const active = d.activeGame;
   const busy = !tv && ((active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || !!ui.spin || !!ui.tour);
   const away = d.ended || (!tv && d.mePlayer?.paused);
-  const item = away || busy ? null : d.toasts.find((x) => !seen.has(x.key) && isLive(x, d.t)) || null;
+  // Under the camera or a photo it waits (see ui/covered.js).
+  const item = useHeld({
+    tv,
+    t: d.t,
+    kind: 'gtoast',
+    keyOf: (x) => x.key,
+    notice: (x) => `🥂 Fællesskål! ${x.pid === d.me ? 'Du udbringer en skål' : `${d.players.get(x.pid)?.name || 'Nogen'} udbringer en skål`}`,
+    pick: (held) => (away || busy ? null : d.toasts.find((x) => !seen.has(x.key) && (isLive(x, d.t) || held(x.key, x.ts))) || null),
+  });
   const key = item?.key || null;
 
   useEffect(() => {

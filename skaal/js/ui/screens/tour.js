@@ -12,6 +12,7 @@ import { unitText, fmtPoints } from '../format.js';
 import { nameOf } from '../feedText.js';
 import { markInboxSeen } from './inbox.js';
 import { eventUi } from './event.js';
+import { useHeld } from '../covered.js';
 
 const seenKey = (room) => `tourSeen:${room.roomId}`;
 
@@ -20,9 +21,17 @@ const isLive = (m, t) => t - m.ts < TOUR.momentMs && m.ts - t < 120_000;
 
 export function TourOverlay({ room, d, tv = false }) {
   const [seen, setSeen] = useState(() => new Set(storage.load(seenKey(room), [])));
-  // Players on a break are left alone (as with breakers); the moment is in their feed.
+  // Players on a break are left alone (as with breakers); the moment is in their feed. Under the
+  // camera or a photo it waits (see ui/covered.js).
   const away = d.ended || (!tv && d.mePlayer?.paused);
-  const moment = away ? null : d.tour.moments.find((m) => !seen.has(m.key) && isLive(m, d.t)) || null;
+  const moment = useHeld({
+    tv,
+    t: d.t,
+    kind: 'tour',
+    keyOf: (m) => m.key,
+    notice: (m) => `🚴 ${nameOf(d, m.pid)} har kørt ${m.n} etaper!`,
+    pick: (held) => (away ? null : d.tour.moments.find((m) => !seen.has(m.key) && (isLive(m, d.t) || held(m.key, m.ts))) || null),
+  });
   const key = moment?.key || null;
 
   useEffect(() => {

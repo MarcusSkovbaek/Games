@@ -7,6 +7,7 @@ import { fmtDuration, unitText } from '../format.js';
 import { sfx, haptic, confetti } from '../feedback.js';
 import { toast, clearToasts } from '../ui-store.js';
 import { eventUi } from './event.js';
+import { uncover } from '../covered.js';
 
 export function BreakerOverlay({ room, d }) {
   const ui = useStore(eventUi);
@@ -50,7 +51,7 @@ export function BreakerOverlay({ room, d }) {
       toast(`${g?.emoji || '🎲'} ${g?.name || 'Et minigame'} starter nu!`, {
         key: 'breaker',
         duration: Math.min(15_000, Math.max(5000, inst.playEnd - d.t)),
-        action: { label: 'Spil med', onClick: () => eventUi.set({ camera: false, photo: null, show: false, comments: false }) },
+        action: { label: 'Spil med', onClick: uncover },
       });
     }
     document.documentElement.classList.add('scroll-locked');

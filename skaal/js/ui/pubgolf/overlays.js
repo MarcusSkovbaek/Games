@@ -1,10 +1,11 @@
 // Pub golf moments that pop up on every phone and the big screen: a new challenge, a competition
 // the judge starts, and a competition podium the judge has just decided.
-import { html, useState, useEffect, useRef, useStore, Button, IconButton, cx } from '../kit.js';
+import { html, useState, useEffect, useStore, Button, IconButton, cx } from '../kit.js';
 import * as storage from '../../core/storage.js';
 import { PG } from '../../game/pubgolf.js';
 import { sfx, haptic, confetti } from '../feedback.js';
-import { clearToasts, toast } from '../ui-store.js';
+import { clearToasts } from '../ui-store.js';
+import { useHeld } from '../covered.js';
 import { eventUi } from '../screens/event.js';
 import { TeamBadge, MEDALS, entrantName, entrantColor } from './common.js';
 import { CrownWinner } from './challenge.js';
@@ -12,14 +13,11 @@ import { PhotoThumb } from '../photos/photo.js';
 import { canTakePhotos } from '../photos/layer.js';
 
 const isLive = (ts, t) => t - ts < PG.momentMs && ts - t < 120_000;
-// A moment that arrived while the camera or a photo covered the screen waits this long for it.
-const COVERED_MS = 5 * 60_000;
 
-// Shared plumbing: remembers what this device has seen and waits for a running minigame.
+// Shared plumbing: remembers what this device has seen and waits for a running minigame — and for
+// the camera or a photo, with `notice(item)` on top (see ui/covered.js).
 // `group` names what an item is about: a newer item in a group this device has just seen doesn't
 // pop up again (the judge filling in a podium one place at a time) — an open pop-up just updates.
-// Under the camera or a photo a moment can't be seen: it waits, with `notice(item)` as a heads-up
-// on top, and pops up when they close.
 function useMoment({ room, d, tv, kind, items, waitFor, group = (x) => x.key, notice }) {
   const ui = useStore(eventUi);
   const storeKey = `${kind}Seen:${room.roomId}`;
@@ -27,25 +25,22 @@ function useMoment({ room, d, tv, kind, items, waitFor, group = (x) => x.key, no
     const raw = storage.load(storeKey, {});
     return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   });
-  const held = useRef(new Set());
   const active = d.activeGame;
   // One moment at a time (also on the big screen); phones also wait for a running minigame.
   const busy = (!tv && active && !(ui.breakerHidden[active.gid] ?? !!d.mePlayer?.paused)) || [].concat(waitFor || []).some((k) => ui[k]);
-  const covered = !tv && (!!ui.camera || !!ui.photo);
   const fresh = (x) => !(group(x) in seen) || x.ts > seen[group(x)] + PG.momentMs;
-  const live = (x) => isLive(x.ts, d.t) || (held.current.has(group(x)) && d.t - x.ts < COVERED_MS);
-  const next = d.ended || busy ? null : items.find((x) => fresh(x) && live(x)) || null;
-  const item = covered ? null : next;
+  const item = useHeld({
+    tv,
+    t: d.t,
+    kind,
+    keyOf: group,
+    notice,
+    pick: (held) => (d.ended || busy ? null : items.find((x) => fresh(x) && (isLive(x.ts, d.t) || held(group(x), x.ts))) || null),
+  });
   const id = item ? group(item) : null;
   useEffect(() => {
     eventUi.set({ [kind]: id });
   }, [id]);
-  const waiting = covered && next ? group(next) : null;
-  useEffect(() => {
-    if (!waiting || held.current.has(waiting)) return;
-    held.current.add(waiting);
-    if (notice) toast(notice(next), { key: kind, duration: 8000, action: { label: 'Se', onClick: () => eventUi.set({ camera: false, photo: null, show: false, comments: false }) } });
-  }, [waiting]);
   const close = () =>
     setSeen((prev) => {
       const next = Object.fromEntries(

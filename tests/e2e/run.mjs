@@ -385,6 +385,21 @@ const scenarios = {
     assert.equal(await bo.page.locator('.inbox-card').count(), 2, 'the sip waits on the drinks tab');
     await sara.page.getByRole('button', { name: /Skål! 🥂/ }).click();
     await sara.page.waitForSelector('.gtoast', { state: 'detached' });
+
+    // Anna is in the camera when Mads raises the next one: a heads-up on top, and the fællesskål
+    // waits for her (longer than one usually stays).
+    await anna.page.getByRole('button', { name: 'Tag et billede', exact: true }).click();
+    await anna.page.waitForSelector('.camera__video.is-on', { timeout: 10000 });
+    await rigSpin(host, 'king', 'all1');
+    await host.page.getByRole('button', { name: /Fedt/ }).click();
+    await anna.page.locator('.toast', { hasText: 'Fællesskål! Mads udbringer en skål' }).waitFor({ timeout: 6000 });
+    assert.equal(await anna.page.locator('.gtoast').count(), 0, 'not hidden under the camera');
+    await fastForward([...all, tv], 2 * 60_000);
+    await anna.page.getByRole('button', { name: 'Luk kameraet' }).click();
+    await anna.page.waitForSelector('.gtoast', { timeout: 6000 });
+    assert.match(await anna.page.locator('.gtoast .overlay__title').textContent(), /Mads udbringer en skål/);
+    await anna.page.locator('.gtoast').getByRole('button', { name: 'Skål — drukket ✓' }).click();
+    await anna.page.waitForSelector('.gtoast', { state: 'detached' });
     assertNoErrors(all.concat(tv));
   },
 
