@@ -348,6 +348,12 @@ const scenarios = {
     await anna.page.waitForSelector('.final-hero', { timeout: 8000 });
     await shot(anna.page, 'e2e-final');
     assert.ok(await anna.page.locator('.award').count(), 'awards are shown');
+    // The result goes to the group chat as text.
+    await anna.page.evaluate(() => Object.defineProperty(navigator, 'share', { value: async (data) => (window.__shared = data), configurable: true }));
+    await anna.page.getByRole('button', { name: 'Del resultatet' }).click();
+    const shared = await anna.page.evaluate(() => window.__shared);
+    assert.match(shared.text, /^🏆 Fredagsbar hos Mads\n🥇 .+ — \d+ point/);
+    assert.match(shared.text, /🍻 \d+ drinks · 3 deltagere/);
 
     // Mads goes home and hands the host role to Anna: she gets the host's controls, and he can
     // leave.
@@ -747,6 +753,11 @@ const scenarios = {
     await sara.page.waitForSelector('.pg-final', { timeout: 6000 });
     assert.match(await sara.page.locator('.pg-final__title').textContent(), /Hold Rød vinder/);
     await shot(sara.page, 'e2e-pg-final');
+    await sara.page.evaluate(() => Object.defineProperty(navigator, 'share', { value: async (data) => (window.__shared = data), configurable: true }));
+    await sara.page.locator('.pg-final').getByRole('button', { name: 'Del resultatet' }).click();
+    const shared = await sara.page.evaluate(() => window.__shared.text);
+    assert.match(shared, /^⛳ Pub golf på Vesterbro\n🥇 Hold Rød [−+±]/, shared);
+    assert.match(shared, /Bedste spillere:/);
     assertNoErrors(all.concat(tv, se));
   },
 

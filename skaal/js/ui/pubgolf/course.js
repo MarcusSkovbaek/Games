@@ -1,7 +1,7 @@
 // The "Bane" tab: the hole (bar) the group is at, your strokes, your team and — for the judge —
 // the scoring panel.
 import { html, useState, useEffect, useRef, useStore, Avatar, Button, Icon, cx } from '../kit.js';
-import { PG, scoreName } from '../../game/pubgolf.js';
+import { PG, scoreName, fmtToPar } from '../../game/pubgolf.js';
 import { setStrokes } from '../../app/actions.js';
 import { sfx, haptic, confetti } from '../feedback.js';
 import { toast, confirmDialog } from '../ui-store.js';
@@ -10,6 +10,7 @@ import { FeedRow } from '../screens/feed.js';
 import { ToPar, TeamChip, PlayerAvatar, holeTitle, mapsLink, MEDALS } from './common.js';
 import { JudgePanel } from './judge.js';
 import { TeamPickerSheet } from './teams.js';
+import { shareText } from '../screens/invite.js';
 
 export function CourseTab({ room, d }) {
   const pg = d.pg;
@@ -189,6 +190,24 @@ function Recent({ room, d }) {
 }
 
 // Shown at the top of the course once the host has ended the event.
+// The result as text for the group chat.
+function resultText(d) {
+  const pg = d.pg;
+  const lines = [`⛳ ${d.meta.name}`];
+  const teams = pg.teams.filter((tm) => tm.played > 0 || tm.pen || tm.bon);
+  teams.forEach((tm, i) => lines.push(`${MEDALS[i] || `${i + 1}.`} ${tm.name} ${fmtToPar(tm.score)}`));
+  const players = pg.individuals.filter((x) => x.played > 0).slice(0, teams.length ? 3 : 10);
+  if (players.length) {
+    if (teams.length) lines.push('', 'Bedste spillere:');
+    players.forEach((x, i) => lines.push(`${teams.length ? `${i + 1}.` : MEDALS[i] || `${i + 1}.`} ${d.players.get(x.pid)?.name || 'En spiller'} ${fmtToPar(x.toPar)} (${x.played} huller)`));
+  }
+  for (const c of pg.comps) {
+    const winner = pg.results.get(c.id)?.places[0];
+    if (winner) lines.push(`${c.emoji} ${c.name}: ${winner.team ? pg.teamById.get(winner.team)?.name : d.players.get(winner.pid)?.name}`);
+  }
+  return lines.join('\n');
+}
+
 function FinalResult({ d }) {
   const pg = d.pg;
   const teams = pg.teams.filter((tm) => tm.played > 0 || tm.pen || tm.bon).slice(0, 3);
@@ -214,5 +233,6 @@ function FinalResult({ d }) {
           <${ToPar} n=${best.toPar} />
         </div>`
       : null}
+    <${Button} block icon="share-2" onClick=${() => shareText(d.meta.name, resultText(d))}>Del resultatet<//>
   </section>`;
 }

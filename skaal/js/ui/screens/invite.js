@@ -27,6 +27,19 @@ export async function copyText(text) {
   }
 }
 
+// Text for a group chat: the phone's share sheet where there is one, otherwise the clipboard.
+export async function shareText(title, text) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+  if (await copyText(text)) toast('Kopieret — sæt det ind i jeres gruppechat 📋', { tone: 'good' });
+}
+
 export function InviteSheet({ room, d, open, onClose }) {
   const link = eventLink(room.code);
   const players = d.ranking.filter((p) => !p.left);

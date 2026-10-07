@@ -8,6 +8,7 @@ import { navigate } from '../router.js';
 import { PhotoOfTheNight } from '../photos/photo.js';
 import { DevelopCard } from '../photos/layer.js';
 import { eventUi } from './event.js';
+import { shareText } from './invite.js';
 
 export function awardsFor(d) {
   const ps = d.ranking.filter((p) => p.alcoholic || p.water || p.sipsTaken || p.sipsGiven);
@@ -35,6 +36,19 @@ export function awardsFor(d) {
   const brain = best((x) => x.quizRight);
   add('🧠', 'Quizmester', brain, brain && `${brain.quizRight} rigtige`);
   return list;
+}
+
+// The result as text for the group chat — names, points and a few numbers; never photos.
+export function resultText(d) {
+  const lines = [`🏆 ${d.meta.name}`];
+  d.ranking
+    .filter((p) => p.points > 0)
+    .slice(0, 10)
+    .forEach((p, i) => lines.push(`${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${p.name} — ${fmtPoints(p.points)} point`));
+  const photos = d.photos.length + d.undeveloped.length;
+  lines.push('', `🍻 ${d.totals.alcoholic} drinks · ${d.ranking.length} deltagere${photos ? ` · 📸 ${photos} billeder` : ''}`);
+  for (const a of awardsFor(d).slice(0, 3)) lines.push(`${a.emoji} ${a.title}: ${a.p.name} (${a.value})`);
+  return lines.join('\n');
 }
 
 export function FinalScreen({ room, d, onTab }) {
@@ -110,6 +124,7 @@ export function FinalScreen({ room, d, onTab }) {
         : null}
 
       <div class="stack stack--s">
+        <${Button} block icon="share-2" onClick=${() => shareText(d.meta.name, resultText(d))}>Del resultatet<//>
         <${Button} variant="secondary" block icon="trophy" onClick=${() => onTab('board')}>Se hele stillingen<//>
         <${Button} variant="secondary" block icon="activity" onClick=${() => onTab('feed')}>Se aftenens feed<//>
         ${d.isHost ? html`<${Button} variant="ghost" block icon="play" onClick=${() => reopenEvent(room)}>Genåbn eventet<//>` : null}
