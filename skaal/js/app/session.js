@@ -54,6 +54,37 @@ function forgetData({ code, roomId }) {
   forgetAvatars(roomId);
 }
 
+// Leaves an event from the list of events without opening it — or, for its host, deletes it: the
+// phone connects in the background just long enough to tell the others, then forgets the event.
+// Returns 'left', 'deleted' or 'gone' (deleted already, or you were removed) — or null when no
+// broker could be reached (nothing is changed then).
+export async function leaveFromList(code, { destroy = false } = {}) {
+  const room = await openEvent(code);
+  if (!room) return null;
+  const wait = async (ok, ms) => {
+    for (const end = Date.now() + ms; !ok() && Date.now() < end; ) await new Promise((r) => setTimeout(r, 200));
+    return ok();
+  };
+  let result = null;
+  try {
+    // Caught up with what the brokers have.
+    if (!(await wait(() => room.brokers.some((b) => b.settled), 15000))) return null;
+    if (room.gone || !room.state.meta) result = 'gone';
+    else if (destroy && room.isHost()) {
+      await room.destroy();
+      result = 'deleted';
+    } else {
+      if (room.me?.profile) room.setProfile({ left: now() });
+      if (!(await wait(() => !room.status.pending, 8000))) return null;
+      result = 'left';
+    }
+    return result;
+  } finally {
+    if (result) forgetEvent(room);
+    if (session.get().room === room) closeEvent();
+  }
+}
+
 // An event's keys take a deliberately slow derivation (see core/crypto.js). The phone keeps what
 // it derived — the key as a CryptoKey, which can't be read out of the browser — so reopening an
 // event (every time the app starts) doesn't take the phone a second to think.

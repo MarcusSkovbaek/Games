@@ -160,6 +160,9 @@ to på ét ark — som en stribe fra en fotoautomat.
   kopier, telefonerne har gemt — og *Forlad eventet* fjerner telefonens egne kopier. Fjerner værten
   en spiller, forsvinder spillerens billeder også fra serverne og fra spillerens telefon. Telefonen
   husker de 12 seneste events; et ældre event forsvinder fra telefonen sammen med dets kopier.
+- **Forlad eller slet fra forsiden:** Ved hvert event under *Dine events* på forsiden kan man forlade
+  eventet — eller, som vært, slette det — uden at åbne det. Telefonen forbinder kort i baggrunden,
+  giver de andre besked og glemmer eventet.
 
 Fotos kræver et event med en kode på 12 tegn (alle nye events). Ældre events med 8 tegn kan stadig
 åbnes, men har ikke fotos, fordi deres kode er for kort til at beskytte billeder godt nok.

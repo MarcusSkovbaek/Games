@@ -1568,6 +1568,22 @@ const scenarios = {
     assert.deepEqual(await filesLeft(ny), [], 'nothing of the event is left on the phone of a removed player');
     assert.deepEqual(await remembered(ny, roomId), []);
 
+    // Right from the list of events on the front page: Anna leaves on her second phone without
+    // opening the event, and the host deletes it.
+    await second.page.goto(env.appUrl('#/'));
+    await second.page.locator('.recent__row', { hasText: 'Fredagsbar hos Mads' }).getByRole('button', { name: 'Forlad Fredagsbar hos Mads' }).click();
+    await second.page.getByRole('button', { name: 'Forlad', exact: true }).click();
+    await second.page.locator('.toast', { hasText: 'Du har forladt Fredagsbar hos Mads' }).waitFor({ timeout: 25000 });
+    assert.equal(await second.page.locator('.recent__row').count(), 0, 'off her list');
+    await back.waitForFunction(() => window.__skaal.derived().ranking.find((p) => p.name === 'Anna')?.left > 0, null, { timeout: 8000 });
+    await back.goto(env.appUrl('#/'));
+    await back.waitForSelector('.landing__logo');
+    await back.getByRole('button', { name: 'Slet Fredagsbar hos Mads' }).click();
+    await back.getByRole('button', { name: 'Slet alt', exact: true }).click();
+    await back.locator('.toast', { hasText: 'Fredagsbar hos Mads er slettet' }).waitFor({ timeout: 25000 });
+    assert.equal(await back.locator('.recent__row').count(), 0);
+    await anna.page.waitForSelector('.empty__title:has-text("Eventet er slettet")', { timeout: 10000 });
+
     const ignore = (ph) => ({ ...ph, errors: ph.errors.filter((e) => !e.includes('WebSocket connection')) });
     assertNoErrors([host, anna, late, second, ny].map(ignore));
   },

@@ -8645,3 +8645,20 @@ button.pg-edit__emoji {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-3);
 }
+
+/* An event in the list on the front page, with leave (or, for its host, delete) beside it. */
+.recent__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recent__row > .recent__item {
+  flex: 1;
+  min-width: 0;
+}
+
+.recent__act {
+  flex: none;
+  color: var(--text-2);
+}
